@@ -2,6 +2,57 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { ReadingTheme, ReadingProgressRecord } from '../types/novel';
 import { CHAPTERS } from '../data/novelData';
 
+export const THEME_STORAGE_KEY = 'literary_reading_theme';
+export const PROGRESS_STORAGE_KEY = 'literary_reading_progress';
+export const FONT_STORAGE_KEY = 'literary_font_size';
+
+// Direct synchronous write to localStorage for guaranteed persistence during tab closing/unload
+export const directWriteProgress = (
+  slug: string,
+  percentage: number,
+  scrollPosition: number,
+  isComplete?: boolean
+) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const chapter = CHAPTERS.find((c) => c.slug === slug);
+    if (!chapter) return;
+
+    const raw = localStorage.getItem(PROGRESS_STORAGE_KEY);
+    const map: Record<string, ReadingProgressRecord> = raw ? JSON.parse(raw) : {};
+    const existing = map[slug];
+
+    const roundedPercentage = Math.min(100, Math.max(0, Math.round(percentage)));
+
+    // High-water mark rule: do NOT downgrade reading progress if the reader scrolls up
+    const effectivePercentage = existing
+      ? Math.max(existing.percentage, roundedPercentage)
+      : roundedPercentage;
+
+    const completed = Boolean(
+      isComplete ||
+      (existing && existing.isComplete) ||
+      effectivePercentage >= 92
+    );
+
+    const effectiveScroll = scrollPosition > 0 ? scrollPosition : (existing?.scrollPosition || 0);
+
+    map[slug] = {
+      slug,
+      title: chapter.title,
+      chapterNumberDisplay: chapter.numberDisplay,
+      percentage: effectivePercentage,
+      scrollPosition: effectiveScroll,
+      updatedAt: Date.now(),
+      isComplete: completed
+    };
+
+    localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(map));
+  } catch (e) {
+    console.error('Failed direct localStorage write', e);
+  }
+};
+
 interface ReadingContextType {
   theme: ReadingTheme;
   setTheme: (theme: ReadingTheme) => void;
@@ -21,10 +72,6 @@ interface ReadingContextType {
 }
 
 const ReadingContext = createContext<ReadingContextType | undefined>(undefined);
-
-const THEME_STORAGE_KEY = 'literary_reading_theme';
-const PROGRESS_STORAGE_KEY = 'literary_reading_progress';
-const FONT_STORAGE_KEY = 'literary_font_size';
 
 export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Theme state
@@ -54,7 +101,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
 
-  // Reading progress storage
+  // Reading progress storage - parsed safely from localStorage
   const [progressMap, setProgressMap] = useState<Record<string, ReadingProgressRecord>>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -68,6 +115,19 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
     return {};
   });
+
+  // Cross-tab synchronization via storage event
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === PROGRESS_STORAGE_KEY && e.newValue) {
+        try {
+          setProgressMap(JSON.parse(e.newValue));
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   // Apply theme to document
   useEffect(() => {
@@ -104,17 +164,34 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!chapter) return;
 
     const roundedPercentage = Math.min(100, Math.max(0, Math.round(percentage)));
-    const record: ReadingProgressRecord = {
-      slug,
-      title: chapter.title,
-      chapterNumberDisplay: chapter.numberDisplay,
-      percentage: roundedPercentage,
-      scrollPosition,
-      updatedAt: Date.now(),
-      isComplete: isComplete || roundedPercentage >= 95
-    };
 
     setProgressMap((prev) => {
+      const existing = prev[slug];
+
+      // High-water mark rule: do NOT lower completion percentage if user scrolls up
+      const effectivePercentage = existing
+        ? Math.max(existing.percentage, roundedPercentage)
+        : roundedPercentage;
+
+      const completed = Boolean(
+        isComplete ||
+        (existing && existing.isComplete) ||
+        effectivePercentage >= 92
+      );
+
+      // Preserve last positive scroll position
+      const effectiveScroll = scrollPosition > 0 ? scrollPosition : (existing?.scrollPosition || 0);
+
+      const record: ReadingProgressRecord = {
+        slug,
+        title: chapter.title,
+        chapterNumberDisplay: chapter.numberDisplay,
+        percentage: effectivePercentage,
+        scrollPosition: effectiveScroll,
+        updatedAt: Date.now(),
+        isComplete: completed
+      };
+
       const next = { ...prev, [slug]: record };
       try {
         localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(next));
@@ -131,7 +208,9 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const resetProgress = () => {
     setProgressMap({});
-    localStorage.removeItem(PROGRESS_STORAGE_KEY);
+    try {
+      localStorage.removeItem(PROGRESS_STORAGE_KEY);
+    } catch {}
   };
 
   const getLastReadRecord = (): ReadingProgressRecord | null => {
