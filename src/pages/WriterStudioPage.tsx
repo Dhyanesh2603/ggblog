@@ -184,6 +184,21 @@ export const WriterStudioPage: React.FC = () => {
                 PRINT / PDF ⎙
               </button>
 
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm('Wipe ALL browser storage (reading progress, custom manuscripts, themes, font settings) and reload pristine default state?')) {
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    window.location.reload();
+                  }
+                }}
+                className="font-mono-meta text-[10px] text-[var(--text-faint)] hover:text-red-700 underline px-2 cursor-pointer transition-colors"
+                title="Wipes all localStorage and reloads pristine project defaults"
+              >
+                Clear All Data ↺
+              </button>
+
               {isCustomized && (
                 <button
                   type="button"

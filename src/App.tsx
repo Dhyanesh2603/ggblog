@@ -14,6 +14,22 @@ import { ReadingPage } from './pages/ReadingPage';
 import { AboutPage } from './pages/AboutPage';
 import { WriterStudioPage } from './pages/WriterStudioPage';
 
+// Instant wipe of browser data if ?clearData, ?reset, or ?clear=true is present in URL
+if (typeof window !== 'undefined') {
+  const search = window.location.search;
+  if (
+    search.includes('clearData') ||
+    search.includes('reset') ||
+    search.includes('clear=true')
+  ) {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+      window.history.replaceState({}, '', window.location.pathname);
+    } catch {}
+  }
+}
+
 // Auto scroll to top on route change (except when chapter restores position)
 function ScrollRestoration() {
   const { pathname } = useLocation();
