@@ -1,10 +1,12 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useReading } from '../context/ReadingContext';
+import { useNovel } from '../context/NovelContext';
 import type { ReadingTheme } from '../types/novel';
 
 export const Header: React.FC = () => {
   const location = useLocation();
+  const { novelMeta } = useNovel();
   const {
     theme,
     setTheme,
@@ -30,9 +32,9 @@ export const Header: React.FC = () => {
             className="font-mono-meta text-[11px] md:text-xs tracking-[0.14em] text-[var(--text)] hover:opacity-70 transition-opacity flex items-center gap-2"
           >
             <span className="opacity-50">※</span>
-            <span>JULIAN THORNE</span>
+            <span>{novelMeta.author.toUpperCase()}</span>
             <span className="hidden sm:inline opacity-35 font-normal">/</span>
-            <span className="hidden sm:inline opacity-60">THE LAST LIGHT</span>
+            <span className="hidden sm:inline opacity-60">{novelMeta.title.toUpperCase()}</span>
           </Link>
         </div>
 
@@ -50,12 +52,13 @@ export const Header: React.FC = () => {
             THE NOVEL
           </Link>
           <Link
-            to="/notes"
-            className={`transition-opacity ${
-              location.pathname.startsWith('/notes') ? 'text-[var(--text)] font-semibold' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+            to="/studio"
+            className={`transition-opacity flex items-center gap-1.5 ${
+              location.pathname.startsWith('/studio') ? 'text-[var(--text)] font-semibold' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
             }`}
           >
-            NOTES
+            <span>STUDIO</span>
+            <span className="text-[9px] px-1 py-0.2 border border-[var(--border)] text-[var(--text)]">WRITER</span>
           </Link>
           <Link
             to="/reading"

@@ -1,8 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { NOVEL_META } from '../data/novelData';
+import { useNovel } from '../context/NovelContext';
 
 export const BookCoverArt: React.FC = () => {
+  const { novelMeta, chapters } = useNovel();
+  const firstChapterSlug = chapters[0]?.slug || 'chapter-01';
   const cardRef = useRef<HTMLDivElement>(null);
   const [rotate, setRotate] = useState({ x: 0, y: 0 });
   const [isHovered, setIsHovered] = useState(false);
@@ -35,10 +37,10 @@ export const BookCoverArt: React.FC = () => {
   return (
     <div className="relative group perspective-[1000px] w-full max-w-[340px] sm:max-w-[360px] mx-auto select-none">
       <Link
-        to="/novel/chapter-01"
+        to={`/novel/${firstChapterSlug}`}
         viewTransition
         className="block focus:outline-none"
-        aria-label="Begin reading Chapter 1 of The Last Light"
+        aria-label={`Begin reading Chapter 1 of ${novelMeta.title}`}
       >
         <div
           ref={cardRef}
@@ -69,7 +71,7 @@ export const BookCoverArt: React.FC = () => {
           {/* Top Folio Header */}
           <div className="relative z-10 flex items-center justify-between text-[10px] font-mono-meta tracking-[0.2em] text-[var(--text-muted)] border-b border-[var(--border-faint)] pb-3">
             <span>FOLIO NO. 01</span>
-            <span>※ {NOVEL_META.year}</span>
+            <span>※ {novelMeta.year}</span>
           </div>
 
           {/* Cover Typographic Heart */}
@@ -79,13 +81,13 @@ export const BookCoverArt: React.FC = () => {
             </span>
 
             <h2 className="font-editorial-title text-4xl sm:text-5xl text-[var(--text)] tracking-tight leading-[0.95]">
-              {NOVEL_META.title}
+              {novelMeta.title}
             </h2>
 
             <div className="w-8 h-[1px] bg-[var(--text)] mx-auto opacity-30" />
 
             <p className="font-editorial-body text-base italic text-[var(--text-muted)]">
-              by {NOVEL_META.author}
+              by {novelMeta.author}
             </p>
           </div>
 

@@ -1,8 +1,10 @@
 import React from 'react';
 import { AUTHOR_DATA } from '../data/authorData';
-import { NOVEL_META } from '../data/novelData';
+import { useNovel } from '../context/NovelContext';
 
 export const AboutPage: React.FC = () => {
+  const { novelMeta, chapters } = useNovel();
+
   return (
     <div className="w-full">
       <section className="editorial-container pt-16 md:pt-24 pb-24 md:pb-32">
@@ -15,7 +17,7 @@ export const AboutPage: React.FC = () => {
             About
           </h1>
           <p className="font-editorial-body text-2xl text-[var(--text-muted)] italic">
-            {AUTHOR_DATA.name} — {AUTHOR_DATA.role}
+            {novelMeta.author || AUTHOR_DATA.name} — {AUTHOR_DATA.role}
           </p>
         </header>
 
@@ -92,10 +94,10 @@ export const AboutPage: React.FC = () => {
                 CURRENT WORK
               </span>
               <p className="font-editorial-body text-base text-[var(--text)]">
-                <em>{NOVEL_META.title}</em> (Serialized Digital Novel)
+                <em>{novelMeta.title}</em> (Serialized Digital Novel)
               </p>
               <p className="font-editorial-body text-xs text-[var(--text-muted)]">
-                Total 8 chapters. Serial release completed {NOVEL_META.year}.
+                Total {chapters.length} chapters. Serial release completed {novelMeta.year}.
               </p>
             </div>
 

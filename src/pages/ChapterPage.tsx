@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { CHAPTERS, NOVEL_META } from '../data/novelData';
+import { useNovel } from '../context/NovelContext';
 import { useReading, directWriteProgress } from '../context/ReadingContext';
 import { ScrollProgress } from '../components/ScrollProgress';
 import { MarginalNote } from '../components/MarginalNote';
 
 export const ChapterPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
+  const { novelMeta, chapters } = useNovel();
   const {
     saveProgress,
     markChapterComplete,
@@ -19,20 +20,67 @@ export const ChapterPage: React.FC = () => {
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [resumedInfo, setResumedInfo] = useState<{ percentage: number } | null>(null);
 
+  // Zen Mode States
+  const [isZenMode, setIsZenMode] = useState(false);
+  const [showZenControls, setShowZenControls] = useState(false);
+
   // Flags to prevent initial mounting from triggering spurious 0% writes
   const isReadyToTrackRef = useRef(false);
   const lastSavedScrollRef = useRef(0);
 
-  // Find current chapter
-  const currentChapter = CHAPTERS.find((c) => c.slug === (slug || 'chapter-01'));
+  // Find current chapter from active novel
+  const currentChapter = chapters.find((c) => c.slug === (slug || 'chapter-01'));
   const prevChapter = currentChapter?.prevSlug
-    ? CHAPTERS.find((c) => c.slug === currentChapter.prevSlug)
+    ? chapters.find((c) => c.slug === currentChapter.prevSlug)
     : null;
   const nextChapter = currentChapter?.nextSlug
-    ? CHAPTERS.find((c) => c.slug === currentChapter.nextSlug)
+    ? chapters.find((c) => c.slug === currentChapter.nextSlug)
     : null;
 
   const currentProgress = currentChapter ? progressMap[currentChapter.slug] : undefined;
+
+  // Keyboard Shortcuts (F = Zen Mode, Esc = Exit Zen, J/K = Scroll)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+
+      if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        setIsZenMode((prev) => !prev);
+      } else if (e.key === 'Escape' && isZenMode) {
+        e.preventDefault();
+        setIsZenMode(false);
+      } else if (e.key === 'j' || e.key === 'J') {
+        e.preventDefault();
+        window.scrollBy({ top: window.innerHeight * 0.7, behavior: 'smooth' });
+      } else if (e.key === 'k' || e.key === 'K') {
+        e.preventDefault();
+        window.scrollBy({ top: -window.innerHeight * 0.7, behavior: 'smooth' });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isZenMode]);
+
+  // Zen mode mouse movement detection to reveal exit pill
+  useEffect(() => {
+    if (!isZenMode) return;
+    let timerId: ReturnType<typeof setTimeout>;
+
+    const handleMouseMove = () => {
+      setShowZenControls(true);
+      clearTimeout(timerId);
+      timerId = setTimeout(() => setShowZenControls(false), 2500);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      clearTimeout(timerId);
+    };
+  }, [isZenMode]);
 
   // 1. Initial Position Setup & Restoration (guaranteed before tracking starts)
   useEffect(() => {
@@ -40,7 +88,7 @@ export const ChapterPage: React.FC = () => {
 
     isReadyToTrackRef.current = false;
     setActiveNoteId(null);
-    document.title = `${currentChapter.numberDisplay} ${currentChapter.title} — ${NOVEL_META.title}`;
+    document.title = `${currentChapter.numberDisplay} ${currentChapter.title} — ${novelMeta.title}`;
 
     // Read direct from localStorage for instant, synchronous accuracy
     let savedScroll = 0;
@@ -62,7 +110,6 @@ export const ChapterPage: React.FC = () => {
       lastSavedScrollRef.current = savedScroll;
       window.scrollTo({ top: savedScroll, behavior: 'instant' });
 
-      // Enable scroll tracking only after browser has settled at restored position
       const timer = setTimeout(() => {
         isReadyToTrackRef.current = true;
       }, 120);
@@ -77,7 +124,7 @@ export const ChapterPage: React.FC = () => {
       }, 120);
       return () => clearTimeout(timer);
     }
-  }, [currentChapter?.slug]);
+  }, [currentChapter?.slug, novelMeta.title]);
 
   // 2. Active Scroll Tracking with RAF Throttling and Synchronous Unload Flushing
   useEffect(() => {
@@ -110,7 +157,7 @@ export const ChapterPage: React.FC = () => {
       }
     };
 
-    // Synchronously flush reading progress to localStorage if user abruptly closes tab, reloads, or switches apps
+    // Synchronously flush reading progress to localStorage if user abruptly closes tab
     const flushOnExit = () => {
       if (!isReadyToTrackRef.current) return;
       const scrollable = document.documentElement.scrollHeight - window.innerHeight;
@@ -158,79 +205,91 @@ export const ChapterPage: React.FC = () => {
   }
 
   return (
-    <article className="w-full relative min-h-screen pb-32">
+    <article className={`w-full relative min-h-screen pb-32 transition-all duration-300 ${isZenMode ? 'pt-4' : ''}`}>
       {/* 1. Subtle 1px Reading Progress Indicator */}
       <ScrollProgress />
 
-      {/* 2. Focused Reading Subheader / Controls */}
-      <nav
-        aria-label="Reading Controls"
-        className="w-full border-b border-[var(--border)] py-2.5 bg-[var(--bg)]/90 backdrop-blur-[2px] sticky top-14 md:top-16 z-30 transition-colors"
-      >
-        <div className="editorial-container flex items-center justify-between text-[11px] font-mono-meta tracking-[0.12em] text-[var(--text-muted)]">
-          {/* Left: Quick Back to TOC & Chapter Progress */}
-          <div className="flex items-center gap-3">
-            <Link
-              to="/novel"
-              viewTransition
-              className="hover:text-[var(--text)] transition-colors flex items-center gap-1.5"
-            >
-              <span>←</span>
-              <span>INDEX</span>
-            </Link>
-            <span className="opacity-30">/</span>
-            <span className="text-[var(--text)] hidden sm:inline">
-              CHAPTER {currentChapter.numberRoman}
-            </span>
-            <span className="opacity-30 hidden sm:inline">/</span>
-            <span className="text-[var(--text-muted)] hidden sm:inline">
-              {currentProgress?.isComplete ? 'COMPLETED' : `${currentProgress?.percentage || 0}% READ`}
-            </span>
-          </div>
-
-          {/* Right: Typography size controls & Mode */}
-          <div className="flex items-center gap-4 sm:gap-6">
-            {/* Font sizing buttons */}
-            <div className="flex items-center gap-1.5 border border-[var(--border)] px-1 py-0.5" aria-label="Font Size">
-              <button
-                type="button"
-                onClick={() => setFontSize('default')}
-                className={`px-1.5 py-0.5 text-[10px] transition-colors ${
-                  fontSize === 'default' ? 'bg-[var(--text)] text-[var(--bg)]' : 'hover:text-[var(--text)]'
-                }`}
-                title="Default reading font size"
+      {/* 2. Focused Reading Subheader / Controls (Hidden in Zen Mode) */}
+      {!isZenMode && (
+        <nav
+          aria-label="Reading Controls"
+          className="w-full border-b border-[var(--border)] py-2.5 bg-[var(--bg)]/90 backdrop-blur-[2px] sticky top-14 md:top-16 z-30 transition-all no-print"
+        >
+          <div className="editorial-container flex items-center justify-between text-[11px] font-mono-meta tracking-[0.12em] text-[var(--text-muted)]">
+            {/* Left: Quick Back to TOC & Chapter Progress */}
+            <div className="flex items-center gap-3">
+              <Link
+                to="/novel"
+                viewTransition
+                className="hover:text-[var(--text)] transition-colors flex items-center gap-1.5"
               >
-                A
-              </button>
-              <button
-                type="button"
-                onClick={() => setFontSize('large')}
-                className={`px-1.5 py-0.5 text-[11px] font-medium transition-colors ${
-                  fontSize === 'large' ? 'bg-[var(--text)] text-[var(--bg)]' : 'hover:text-[var(--text)]'
-                }`}
-                title="Larger reading font size"
-              >
-                A+
-              </button>
+                <span>←</span>
+                <span>INDEX</span>
+              </Link>
+              <span className="opacity-30">/</span>
+              <span className="text-[var(--text)] hidden sm:inline">
+                CHAPTER {currentChapter.numberRoman}
+              </span>
+              <span className="opacity-30 hidden sm:inline">/</span>
+              <span className="text-[var(--text-muted)] hidden sm:inline">
+                {currentProgress?.isComplete ? 'COMPLETED' : `${currentProgress?.percentage || 0}% READ`}
+              </span>
             </div>
 
-            {/* Quick TOC Drawer trigger */}
-            <button
-              type="button"
-              onClick={() => setIsTocOpen(true)}
-              className="hover:text-[var(--text)] transition-colors cursor-pointer"
-            >
-              CONTENTS
-            </button>
+            {/* Right: Typography size controls & Mode */}
+            <div className="flex items-center gap-4 sm:gap-6">
+              {/* Zen Mode Button */}
+              <button
+                type="button"
+                onClick={() => setIsZenMode(true)}
+                className="hover:text-[var(--text)] transition-colors flex items-center gap-1.5 cursor-pointer font-medium"
+                title="Distraction-Free Zen Mode (Press F)"
+              >
+                <span>ZEN (F)</span>
+              </button>
+
+              {/* Font sizing buttons */}
+              <div className="flex items-center gap-1.5 border border-[var(--border)] px-1 py-0.5" aria-label="Font Size">
+                <button
+                  type="button"
+                  onClick={() => setFontSize('default')}
+                  className={`px-1.5 py-0.5 text-[10px] transition-colors ${
+                    fontSize === 'default' ? 'bg-[var(--text)] text-[var(--bg)]' : 'hover:text-[var(--text)]'
+                  }`}
+                  title="Default reading font size"
+                >
+                  A
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFontSize('large')}
+                  className={`px-1.5 py-0.5 text-[11px] font-medium transition-colors ${
+                    fontSize === 'large' ? 'bg-[var(--text)] text-[var(--bg)]' : 'hover:text-[var(--text)]'
+                  }`}
+                  title="Larger reading font size"
+                >
+                  A+
+                </button>
+              </div>
+
+              {/* Quick TOC Drawer trigger */}
+              <button
+                type="button"
+                onClick={() => setIsTocOpen(true)}
+                className="hover:text-[var(--text)] transition-colors cursor-pointer"
+              >
+                CONTENTS
+              </button>
+            </div>
           </div>
-        </div>
-      </nav>
+        </nav>
+      )}
 
       {/* 2b. Discreet Resumed Notification Pill if continuing a reading session */}
-      {resumedInfo && (
+      {resumedInfo && !isZenMode && (
         <aside
           aria-label="Reading position notice"
-          className="w-full border-b border-[var(--border)] bg-[var(--paper-tint)]/60 py-2 transition-all"
+          className="w-full border-b border-[var(--border)] bg-[var(--paper-tint)]/60 py-2 transition-all no-print"
         >
           <div className="editorial-container flex items-center justify-between font-mono-meta text-[10px] tracking-[0.14em] text-[var(--text-muted)]">
             <span className="flex items-center gap-2">
@@ -248,14 +307,36 @@ export const ChapterPage: React.FC = () => {
         </aside>
       )}
 
+      {/* Floating Zen Mode Exit Banner */}
+      {isZenMode && (
+        <aside
+          aria-label="Zen mode status"
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 transition-opacity duration-300 no-print ${
+            showZenControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
+        >
+          <div className="bg-[var(--bg)] border border-[var(--border)] px-4 py-2 shadow-xl flex items-center gap-4 font-mono-meta text-[10px] tracking-[0.16em] text-[var(--text-muted)] rounded-[2px]">
+            <span>ZEN READING MODE ACTIVE</span>
+            <span className="opacity-40">|</span>
+            <button
+              type="button"
+              onClick={() => setIsZenMode(false)}
+              className="text-[var(--text)] hover:underline cursor-pointer font-semibold"
+            >
+              EXIT (ESC / F)
+            </button>
+          </div>
+        </aside>
+      )}
+
       {/* 3. The Digital Book Canvas */}
-      <div className="editorial-container pt-16 md:pt-28">
+      <div className={`editorial-container ${isZenMode ? 'pt-8 md:pt-16' : 'pt-16 md:pt-28'}`}>
         <div className="reading-column">
           {/* Chapter Folio Header */}
           <header className="mb-14 md:mb-20 space-y-4 text-left">
             <div className="flex items-center justify-between font-mono-meta text-[11px] md:text-xs tracking-[0.18em] text-[var(--text-faint)] pb-3 border-b border-[var(--border)]">
               <span>
-                {currentChapter.numberDisplay} / {String(CHAPTERS.length).padStart(2, '0')}
+                {currentChapter.numberDisplay} / {String(chapters.length).padStart(2, '0')}
               </span>
               <span>
                 {String(currentChapter.readingTimeMin).padStart(2, '0')} MIN READ · {currentChapter.wordCount.toLocaleString()} WORDS
@@ -291,6 +372,16 @@ export const ChapterPage: React.FC = () => {
                 ? currentChapter.notes.find((n) => n.id === p.noteId)
                 : null;
 
+              if (p.isBreak) {
+                return (
+                  <div key={index} className="py-8 text-center">
+                    <span className="font-editorial-title text-2xl text-[var(--text-faint)] select-none">
+                      ※   ※   ※
+                    </span>
+                  </div>
+                );
+              }
+
               return (
                 <div key={index} className="relative">
                   <p className="leading-relaxed">
@@ -317,103 +408,107 @@ export const ChapterPage: React.FC = () => {
             </span>
           </div>
 
-          {/* Chapter Navigation Footer */}
-          <nav
-            aria-label="Chapter Navigation"
-            className="border-t border-b border-[var(--border)] py-8 my-8"
-          >
-            <div className="grid grid-cols-2 gap-6 items-center">
-              {/* Prev Chapter */}
-              <div>
-                {prevChapter ? (
-                  <Link
-                    to={`/novel/${prevChapter.slug}`}
-                    viewTransition
-                    className="group block text-left space-y-1"
-                  >
-                    <span className="font-mono-meta text-[10px] tracking-[0.16em] text-[var(--text-muted)] group-hover:text-[var(--text)] transition-colors flex items-center gap-1">
-                      <span>←</span>
-                      <span>PREVIOUS CHAPTER</span>
-                    </span>
-                    <span className="font-editorial-title text-xl sm:text-2xl text-[var(--text)] group-hover:italic transition-all block">
-                      {prevChapter.title}
-                    </span>
-                  </Link>
-                ) : (
-                  <Link
-                    to="/novel"
-                    viewTransition
-                    className="group block text-left space-y-1"
-                  >
-                    <span className="font-mono-meta text-[10px] tracking-[0.16em] text-[var(--text-muted)]">
-                      ← COVER & INDEX
-                    </span>
-                    <span className="font-editorial-title text-xl text-[var(--text)] block">
-                      Table of Contents
-                    </span>
-                  </Link>
-                )}
-              </div>
+          {/* Chapter Navigation Footer (Hidden in Zen Mode) */}
+          {!isZenMode && (
+            <nav
+              aria-label="Chapter Navigation"
+              className="border-t border-b border-[var(--border)] py-8 my-8 no-print"
+            >
+              <div className="grid grid-cols-2 gap-6 items-center">
+                {/* Prev Chapter */}
+                <div>
+                  {prevChapter ? (
+                    <Link
+                      to={`/novel/${prevChapter.slug}`}
+                      viewTransition
+                      className="group block text-left space-y-1"
+                    >
+                      <span className="font-mono-meta text-[10px] tracking-[0.16em] text-[var(--text-muted)] group-hover:text-[var(--text)] transition-colors flex items-center gap-1">
+                        <span>←</span>
+                        <span>PREVIOUS CHAPTER</span>
+                      </span>
+                      <span className="font-editorial-title text-xl sm:text-2xl text-[var(--text)] group-hover:italic transition-all block">
+                        {prevChapter.title}
+                      </span>
+                    </Link>
+                  ) : (
+                    <Link
+                      to="/novel"
+                      viewTransition
+                      className="group block text-left space-y-1"
+                    >
+                      <span className="font-mono-meta text-[10px] tracking-[0.16em] text-[var(--text-muted)]">
+                        ← COVER & INDEX
+                      </span>
+                      <span className="font-editorial-title text-xl text-[var(--text)] block">
+                        Table of Contents
+                      </span>
+                    </Link>
+                  )}
+                </div>
 
-              {/* Next Chapter */}
-              <div className="text-right">
-                {nextChapter ? (
-                  <Link
-                    to={`/novel/${nextChapter.slug}`}
-                    viewTransition
-                    onClick={() => markChapterComplete(currentChapter.slug)}
-                    className="group block text-right space-y-1"
-                  >
-                    <span className="font-mono-meta text-[10px] tracking-[0.16em] text-[var(--text-muted)] group-hover:text-[var(--text)] transition-colors flex items-center justify-end gap-1">
-                      <span>NEXT CHAPTER</span>
-                      <span>→</span>
-                    </span>
-                    <span className="font-editorial-title text-xl sm:text-2xl text-[var(--text)] group-hover:italic transition-all block">
-                      {nextChapter.title}
-                    </span>
-                  </Link>
-                ) : (
-                  <div className="space-y-1">
-                    <span className="font-mono-meta text-[10px] tracking-[0.16em] text-[var(--text-faint)]">
-                      END OF SERIAL
-                    </span>
-                    <span className="font-editorial-title text-xl text-[var(--text)] italic block">
-                      The Last Light
-                    </span>
-                  </div>
-                )}
+                {/* Next Chapter */}
+                <div className="text-right">
+                  {nextChapter ? (
+                    <Link
+                      to={`/novel/${nextChapter.slug}`}
+                      viewTransition
+                      onClick={() => markChapterComplete(currentChapter.slug)}
+                      className="group block text-right space-y-1"
+                    >
+                      <span className="font-mono-meta text-[10px] tracking-[0.16em] text-[var(--text-muted)] group-hover:text-[var(--text)] transition-colors flex items-center justify-end gap-1">
+                        <span>NEXT CHAPTER</span>
+                        <span>→</span>
+                      </span>
+                      <span className="font-editorial-title text-xl sm:text-2xl text-[var(--text)] group-hover:italic transition-all block">
+                        {nextChapter.title}
+                      </span>
+                    </Link>
+                  ) : (
+                    <div className="space-y-1">
+                      <span className="font-mono-meta text-[10px] tracking-[0.16em] text-[var(--text-faint)]">
+                        END OF SERIAL
+                      </span>
+                      <span className="font-editorial-title text-xl text-[var(--text)] italic block">
+                        {novelMeta.title}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          </nav>
+            </nav>
+          )}
 
-          {/* Quick chapter status & return */}
-          <div className="pt-4 flex items-center justify-between text-[11px] font-mono-meta text-[var(--text-muted)]">
-            <div className="flex items-center gap-3">
-              <span>
-                STATUS: {currentProgress?.isComplete ? 'COMPLETED' : `${currentProgress?.percentage || 0}% READ`}
-              </span>
+          {/* Quick chapter status & return (Hidden in Zen Mode) */}
+          {!isZenMode && (
+            <div className="pt-4 flex items-center justify-between text-[11px] font-mono-meta text-[var(--text-muted)] no-print">
+              <div className="flex items-center gap-3">
+                <span>
+                  STATUS: {currentProgress?.isComplete ? 'COMPLETED' : `${currentProgress?.percentage || 0}% READ`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (currentProgress?.isComplete) {
+                      saveProgress(currentChapter.slug, 0, 0, false);
+                    } else {
+                      markChapterComplete(currentChapter.slug);
+                    }
+                  }}
+                  className="underline hover:text-[var(--text)] cursor-pointer"
+                >
+                  {currentProgress?.isComplete ? 'RESET TO UNREAD' : 'MARK AS READ ✓'}
+                </button>
+              </div>
               <button
                 type="button"
-                onClick={() => {
-                  if (currentProgress?.isComplete) {
-                    saveProgress(currentChapter.slug, 0, 0, false);
-                  } else {
-                    markChapterComplete(currentChapter.slug);
-                  }
-                }}
-                className="underline hover:text-[var(--text)] cursor-pointer"
+                onClick={() => setIsTocOpen(true)}
+                className="hover:text-[var(--text)] transition-colors cursor-pointer"
               >
-                {currentProgress?.isComplete ? 'RESET TO UNREAD' : 'MARK AS READ ✓'}
+                ALL CHAPTERS ({chapters.length}) →
               </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsTocOpen(true)}
-              className="hover:text-[var(--text)] transition-colors cursor-pointer"
-            >
-              ALL CHAPTERS (8) →
-            </button>
-          </div>
+          )}
         </div>
       </div>
     </article>

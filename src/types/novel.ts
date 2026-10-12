@@ -1,5 +1,17 @@
 export type ReadingTheme = 'light' | 'dark' | 'paper';
 
+export interface NovelMeta {
+  title: string;
+  subtitle: string;
+  author: string;
+  year: string;
+  totalChapters: number;
+  estimatedTotalReadingTime: string;
+  heroExcerpt: string;
+  coverQuote: string;
+  synopsis: string;
+}
+
 export interface AuthorNote {
   id: string;
   marker: string; // e.g. "[1]"

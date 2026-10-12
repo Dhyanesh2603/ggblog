@@ -70,13 +70,13 @@ export const MobileMenu: React.FC = () => {
           The Novel
         </Link>
         <Link
-          to="/notes"
+          to="/studio"
           onClick={handleNavClick}
           className={`font-editorial-title text-4xl sm:text-5xl tracking-tight transition-colors ${
-            location.pathname.startsWith('/notes') ? 'text-[var(--text)] italic' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+            location.pathname.startsWith('/studio') ? 'text-[var(--text)] italic' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
           }`}
         >
-          Notes & Journal
+          Writer Studio
         </Link>
         <Link
           to="/reading"

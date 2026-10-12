@@ -1,19 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { NOVEL_META, CHAPTERS } from '../data/novelData';
+import { CHAPTERS as DEFAULT_CHAPTERS } from '../data/novelData';
 import { AUTHOR_DATA } from '../data/authorData';
-import { JOURNAL_NOTES } from '../data/notesData';
 import { useReading } from '../context/ReadingContext';
+import { useNovel } from '../context/NovelContext';
 import { AmbientCanvas } from '../components/AmbientCanvas';
 import { BookCoverArt } from '../components/BookCoverArt';
 import { AmbientSound } from '../components/AmbientSound';
 
-const FEATURED_EXCERPTS = [
-  {
-    quote: 'It had been raining since four in the afternoon, and by midnight the city had forgotten how to be quiet.',
-    source: 'FROM CHAPTER I — THE BEGINNING',
-    chapterSlug: 'chapter-01'
-  },
+const STATIC_EXCERPTS = [
   {
     quote: 'We never notice when the water turns to salt, only that thirst has arrived.',
     source: 'MARGINALIA — FOLIO NOTE 01',
@@ -51,23 +46,38 @@ const NOVEL_SETTINGS = [
 
 export const HomePage: React.FC = () => {
   const { getLastReadRecord, progressMap } = useReading();
+  const { chapters, novelMeta } = useNovel();
   const lastRead = getLastReadRecord();
+
+  const activeChapters = chapters.length > 0 ? chapters : DEFAULT_CHAPTERS;
+  const firstChapter = activeChapters[0];
+  const firstChapterSlug = firstChapter?.slug || 'chapter-01';
 
   // Active quote in carousel
   const [activeQuoteIdx, setActiveQuoteIdx] = useState(0);
 
   // Active hovered chapter in TOC explorer
-  const [hoveredChapter, setHoveredChapter] = useState(CHAPTERS[0]);
+  const [hoveredChapterId, setHoveredChapterId] = useState<number | null>(null);
+  const hoveredChapter = activeChapters.find((c) => c.id === hoveredChapterId) || firstChapter;
+
+  const featuredExcerpts = [
+    {
+      quote: novelMeta.heroExcerpt || 'It had been raining since four in the afternoon, and by midnight the city had forgotten how to be quiet.',
+      source: `FROM ${firstChapter?.title ? firstChapter.title.toUpperCase() : 'CHAPTER I'}`,
+      chapterSlug: firstChapterSlug
+    },
+    ...STATIC_EXCERPTS
+  ];
 
   // Auto advance quote every 9s unless manually interacted
   useEffect(() => {
     const interval = setInterval(() => {
-      setActiveQuoteIdx((prev) => (prev + 1) % FEATURED_EXCERPTS.length);
+      setActiveQuoteIdx((prev) => (prev + 1) % featuredExcerpts.length);
     }, 9000);
     return () => clearInterval(interval);
-  }, []);
+  }, [featuredExcerpts.length]);
 
-  const currentQuote = FEATURED_EXCERPTS[activeQuoteIdx];
+  const currentQuote = featuredExcerpts[activeQuoteIdx] || featuredExcerpts[0];
 
   return (
     <div className="w-full relative">
@@ -83,7 +93,7 @@ export const HomePage: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-4 animate-reveal-1">
               <span className="font-mono-meta text-[11px] md:text-xs tracking-[0.18em] text-[var(--text-muted)] flex items-center gap-2">
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--text)] animate-pulse" />
-                <span>NOVEL / {NOVEL_META.year} · UNBOUND EDITION</span>
+                <span>NOVEL / {novelMeta.year} · UNBOUND EDITION</span>
               </span>
 
               {/* Rain Sound Synthesizer */}
@@ -93,12 +103,12 @@ export const HomePage: React.FC = () => {
             {/* Novel Title with magnetic presence */}
             <div className="space-y-3">
               <h1 className="animate-reveal-2 font-editorial-title text-5xl xs:text-6xl sm:text-7xl md:text-8xl lg:text-9xl tracking-tight text-[var(--text)] leading-[0.92] max-w-full break-words">
-                {NOVEL_META.title}
+                {novelMeta.title}
               </h1>
 
               <div className="animate-reveal-3">
                 <p className="font-editorial-body text-xl sm:text-2xl italic text-[var(--text-muted)]">
-                  A novel by {NOVEL_META.author}
+                  A novel by {novelMeta.author}
                 </p>
               </div>
             </div>
@@ -117,7 +127,7 @@ export const HomePage: React.FC = () => {
 
                   {/* Quote switcher pagination dots */}
                   <div className="flex items-center gap-1.5" role="tablist" aria-label="Selected excerpts">
-                    {FEATURED_EXCERPTS.map((_, idx) => (
+                    {featuredExcerpts.map((_, idx) => (
                       <button
                         key={idx}
                         type="button"
@@ -138,7 +148,7 @@ export const HomePage: React.FC = () => {
             {/* Primary Actions: Begin Reading & Continue Progress */}
             <div className="animate-reveal-5 pt-4 flex flex-col sm:flex-row sm:items-center items-start gap-4 sm:gap-6">
               <Link
-                to="/novel/chapter-01"
+                to={`/novel/${firstChapterSlug}`}
                 viewTransition
                 className="group inline-flex items-center gap-3 font-mono-meta text-xs md:text-sm tracking-[0.18em] text-[var(--text)] py-3.5 px-6 border border-[var(--text)] hover:bg-[var(--text)] hover:text-[var(--bg)] transition-all duration-200 shadow-sm cursor-pointer"
               >
@@ -156,7 +166,7 @@ export const HomePage: React.FC = () => {
               </a>
 
               <span className="font-mono-meta text-[11px] tracking-[0.12em] text-[var(--text-faint)] sm:ml-auto">
-                8 CHAPTERS · ~{NOVEL_META.estimatedTotalReadingTime}
+                {activeChapters.length} CHAPTERS · ~{novelMeta.estimatedTotalReadingTime}
               </span>
             </div>
 
@@ -212,15 +222,15 @@ export const HomePage: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
             {/* Left Column: Interactive Chapter Rows */}
             <div className="lg:col-span-7 divide-y divide-[var(--border)]">
-              {CHAPTERS.map((ch) => {
+              {activeChapters.map((ch) => {
                 const progress = progressMap[ch.slug];
                 const isSelected = hoveredChapter.id === ch.id;
 
                 return (
                   <div
                     key={ch.id}
-                    onMouseEnter={() => setHoveredChapter(ch)}
-                    onClick={() => setHoveredChapter(ch)}
+                    onMouseEnter={() => setHoveredChapterId(ch.id)}
+                    onClick={() => setHoveredChapterId(ch.id)}
                     className={`group py-5 sm:py-6 transition-all duration-200 cursor-pointer ${
                       isSelected ? 'pl-3 border-l-2 border-[var(--text)] bg-[var(--paper-tint)]/40' : 'hover:pl-2'
                     }`}
@@ -276,7 +286,7 @@ export const HomePage: React.FC = () => {
 
               <div>
                 <span className="font-mono-meta text-xs text-[var(--text-faint)] block mb-1">
-                  {hoveredChapter.numberDisplay} / 08
+                  {hoveredChapter.numberDisplay} / {String(activeChapters.length).padStart(2, '0')}
                 </span>
                 <h4 className="font-editorial-title text-3xl sm:text-4xl text-[var(--text)]">
                   {hoveredChapter.title}
@@ -290,9 +300,11 @@ export const HomePage: React.FC = () => {
               )}
 
               {/* Opening excerpt from this chapter */}
-              <p className="font-editorial-body text-base text-[var(--text)] leading-relaxed italic line-clamp-4">
-                "{hoveredChapter.paragraphs[0]?.text}"
-              </p>
+              {hoveredChapter.paragraphs[0] && (
+                <p className="font-editorial-body text-base text-[var(--text)] leading-relaxed italic line-clamp-4">
+                  "{hoveredChapter.paragraphs[0].text}"
+                </p>
+              )}
 
               <div className="pt-2">
                 <Link
@@ -321,34 +333,39 @@ export const HomePage: React.FC = () => {
                 The Opening Scene
               </h2>
               <p className="font-editorial-body text-base italic text-[var(--text-muted)]">
-                Begin reading Chapter I immediately right on this page.
+                Begin reading {firstChapter?.title || 'Chapter I'} immediately right on this page.
               </p>
             </div>
 
             {/* Typeset sample reading block */}
             <div className="p-6 sm:p-10 bg-[var(--paper-tint)]/60 border border-[var(--border)] space-y-6 text-left font-editorial-body text-[19px] sm:text-[21px] leading-[1.8] text-[var(--text)] shadow-sm">
-              <p>
-                <span className="font-editorial-title text-5xl float-left mr-3 mt-1 leading-none text-[var(--text)]">
-                  I
-                </span>
-                t had been raining since four in the afternoon, and by midnight the city had forgotten how to be quiet. The water did not fall in drops but drifted across the glass like grease, catching the halogen amber of the streetlamps and bending it into smeared horizontal ribbons.
-              </p>
-              <p>
-                Thomas stood by the tall sash window on the third floor of the St. Jude building, holding a half-folded telegram he had not opened for three days. The paper was dry, brittle at the creases, smelling faintly of tea and cold linoleum. In the street below, an electric tram hummed along its steel track with a lonely clatter, throwing blue sparks against the dripping telephone wires before vanishing into the fog near the canal.
-              </p>
-              <p className="text-[var(--text-muted)] italic text-lg">
-                He had not expected anything from his uncle after eleven years of silence. Families, Thomas had often told himself, were like maps drawn in pencil...
-              </p>
+              {firstChapter?.paragraphs && firstChapter.paragraphs.length > 0 ? (
+                <>
+                  <p>
+                    <span className="font-editorial-title text-5xl float-left mr-3 mt-1 leading-none text-[var(--text)]">
+                      {firstChapter.paragraphs[0].text.charAt(0)}
+                    </span>
+                    {firstChapter.paragraphs[0].text.slice(1)}
+                  </p>
+                  {firstChapter.paragraphs.slice(1, 3).map((p, pIdx) => (
+                    <p key={pIdx} className={p.isDialogue ? 'italic' : ''}>
+                      {p.text}
+                    </p>
+                  ))}
+                </>
+              ) : (
+                <p>Begin reading in the full chapter reader.</p>
+              )}
 
               <div className="pt-6 border-t border-[var(--border-faint)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <span className="font-mono-meta text-[11px] tracking-[0.14em] text-[var(--text-faint)]">
-                  END OF PREVIEW · 1,840 WORDS REMAINING
+                  END OF PREVIEW · {Math.max(0, (firstChapter?.wordCount || 1000) - 200).toLocaleString()} WORDS REMAINING
                 </span>
                 <Link
-                  to="/novel/chapter-01"
+                  to={`/novel/${firstChapterSlug}`}
                   className="inline-flex items-center gap-2 font-mono-meta text-xs tracking-[0.16em] text-[var(--text)] hover:underline font-semibold"
                 >
-                  <span>CONTINUE READING CHAPTER I IN FULL SCREEN</span>
+                  <span>CONTINUE READING {firstChapter?.numberDisplay || 'CHAPTER I'} IN FULL SCREEN</span>
                   <span>→</span>
                 </Link>
               </div>
@@ -387,59 +404,7 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 5. SELECTED ESSAYS / NOTES PREVIEW */}
-      <section className="relative z-10 border-t border-[var(--border)] pt-16 md:pt-24 pb-20 md:pb-28">
-        <div className="editorial-container">
-          <div className="flex flex-col md:flex-row md:items-baseline justify-between mb-10 pb-4 border-b border-[var(--border)]">
-            <div>
-              <span className="font-mono-meta text-[11px] tracking-[0.18em] text-[var(--text-muted)] block">
-                FROM THE AUTHOR'S DESK
-              </span>
-              <h2 className="font-editorial-title text-4xl sm:text-5xl tracking-tight text-[var(--text)] mt-1">
-                Selected Notes
-              </h2>
-            </div>
-            <Link
-              to="/notes"
-              className="font-mono-meta text-[11px] tracking-[0.14em] text-[var(--text)] hover:underline mt-2 md:mt-0"
-            >
-              VIEW ALL JOURNAL ENTRIES →
-            </Link>
-          </div>
-
-          <div className="divide-y divide-[var(--border)]">
-            {JOURNAL_NOTES.slice(0, 3).map((note) => (
-              <div key={note.id} className="py-6 sm:py-7">
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-baseline">
-                  <div className="md:col-span-3">
-                    <span className="font-mono-meta text-[11px] tracking-[0.14em] text-[var(--text-faint)]">
-                      {note.date}
-                    </span>
-                  </div>
-                  <div className="md:col-span-6">
-                    <Link
-                      to="/notes"
-                      className="font-editorial-body text-xl sm:text-2xl font-medium text-[var(--text)] hover:underline block"
-                    >
-                      {note.title}
-                    </Link>
-                    <p className="font-editorial-body text-sm sm:text-base text-[var(--text-muted)] mt-1.5 line-clamp-2">
-                      {note.summary}
-                    </p>
-                  </div>
-                  <div className="md:col-span-3 md:text-right">
-                    <span className="font-mono-meta text-[10px] text-[var(--text-faint)]">
-                      {note.readTime}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 6. ABOUT THE AUTHOR COMPOSITION */}
+      {/* 5. ABOUT THE AUTHOR COMPOSITION */}
       <section className="relative z-10 border-t border-[var(--border)] pt-16 md:pt-24 pb-16 bg-[var(--paper-tint)]/20">
         <div className="editorial-container">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">

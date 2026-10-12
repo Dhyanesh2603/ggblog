@@ -237,3 +237,62 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* Classical Typeset Print Book Stylesheet for PDF Export */
+@media print {
+  @page {
+    size: A5;
+    margin: 20mm 15mm 20mm 15mm;
+  }
+
+  header,
+  nav,
+  footer,
+  aside,
+  button,
+  .scroll-progress-bar,
+  .no-print {
+    display: none !important;
+  }
+
+  body,
+  html,
+  #root,
+  main {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+    line-height: 1.55 !important;
+  }
+
+  .reading-column {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  article {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  h1 {
+    font-size: 26pt !important;
+    page-break-after: avoid;
+    break-after: avoid;
+    margin-top: 30pt !important;
+  }
+
+  p {
+    orphans: 3;
+    widows: 3;
+    text-indent: 1.5em;
+    margin-top: 0;
+    margin-bottom: 0.3em;
+  }
+
+  p:first-of-type {
+    text-indent: 0;
+  }
+}

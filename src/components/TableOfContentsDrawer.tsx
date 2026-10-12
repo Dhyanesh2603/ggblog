@@ -1,10 +1,11 @@
 import React, { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useReading } from '../context/ReadingContext';
-import { CHAPTERS, NOVEL_META } from '../data/novelData';
+import { useNovel } from '../context/NovelContext';
 
 export const TableOfContentsDrawer: React.FC = () => {
   const { isTocOpen, setIsTocOpen, progressMap } = useReading();
+  const { chapters, novelMeta } = useNovel();
   const location = useLocation();
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export const TableOfContentsDrawer: React.FC = () => {
           <div className="flex items-center justify-between border-b border-[var(--border)] pb-4 mb-8">
             <div>
               <span className="font-mono-meta text-[10px] tracking-[0.16em] text-[var(--text-muted)] block">
-                {NOVEL_META.title}
+                {novelMeta.title}
               </span>
               <h2 className="font-editorial-title text-2xl tracking-tight text-[var(--text)] mt-0.5">
                 Table of Contents
@@ -58,7 +59,7 @@ export const TableOfContentsDrawer: React.FC = () => {
 
           {/* Chapter list */}
           <nav className="divide-y divide-[var(--border-faint)]" aria-label="Chapters">
-            {CHAPTERS.map((chapter) => {
+            {chapters.map((chapter) => {
               const currentProgress = progressMap[chapter.slug];
               const isCurrent = location.pathname === `/novel/${chapter.slug}`;
 
@@ -102,7 +103,7 @@ export const TableOfContentsDrawer: React.FC = () => {
           <div className="flex justify-between items-center text-left">
             <div>
               <p className="font-mono-meta text-[10px] text-[var(--text-muted)]">
-                TOTAL: 8 CHAPTERS · {NOVEL_META.estimatedTotalReadingTime}
+                TOTAL: {chapters.length} CHAPTERS · {novelMeta.estimatedTotalReadingTime}
               </p>
               <p className="font-editorial-body text-xs italic text-[var(--text-faint)] mt-1">
                 Reading progress saved automatically to this device.

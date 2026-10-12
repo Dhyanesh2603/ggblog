@@ -1,10 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { NOVEL_META, CHAPTERS } from '../data/novelData';
 import { useReading } from '../context/ReadingContext';
+import { useNovel } from '../context/NovelContext';
 
 export const NovelIndexPage: React.FC = () => {
   const { progressMap, getLastReadRecord, resetProgress } = useReading();
+  const { chapters, novelMeta } = useNovel();
   const lastRead = getLastReadRecord();
 
   return (
@@ -12,23 +13,32 @@ export const NovelIndexPage: React.FC = () => {
       <section className="editorial-container pt-16 md:pt-24 pb-20 md:pb-32">
         {/* Title Folio */}
         <div className="max-w-3xl space-y-6 pb-12 border-b border-[var(--border)]">
-          <span className="font-mono-meta text-[11px] md:text-xs tracking-[0.18em] text-[var(--text-muted)] block">
-            ARCHIVE / NOVEL FOLIO · {NOVEL_META.year}
-          </span>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <span className="font-mono-meta text-[11px] md:text-xs tracking-[0.18em] text-[var(--text-muted)] block">
+              ARCHIVE / NOVEL FOLIO · {novelMeta.year}
+            </span>
+            <Link
+              to="/studio"
+              className="font-mono-meta text-[11px] tracking-[0.14em] text-[var(--text)] hover:underline inline-flex items-center gap-1.5 border border-[var(--border)] px-3 py-1"
+            >
+              <span>MANAGE IN STUDIO</span>
+              <span>✍</span>
+            </Link>
+          </div>
           <h1 className="font-editorial-title text-6xl sm:text-7xl md:text-8xl tracking-tight text-[var(--text)]">
-            {NOVEL_META.title}
+            {novelMeta.title}
           </h1>
           <p className="font-editorial-body text-xl sm:text-2xl italic text-[var(--text-muted)]">
-            A novel in eight folios by {NOVEL_META.author}
+            A novel in {chapters.length} folios by {novelMeta.author}
           </p>
           <p className="font-editorial-body text-lg text-[var(--text)] leading-relaxed pt-2">
-            {NOVEL_META.synopsis}
+            {novelMeta.synopsis}
           </p>
 
           <div className="flex flex-wrap items-center gap-6 pt-4 font-mono-meta text-xs tracking-[0.14em] text-[var(--text-muted)]">
-            <span>8 CHAPTERS</span>
+            <span>{chapters.length} CHAPTERS</span>
             <span>·</span>
-            <span>TOTAL ~{NOVEL_META.estimatedTotalReadingTime}</span>
+            <span>TOTAL ~{novelMeta.estimatedTotalReadingTime}</span>
             <span>·</span>
             <span>UNABRIDGED</span>
           </div>
@@ -67,7 +77,7 @@ export const NovelIndexPage: React.FC = () => {
           </div>
 
           <div className="divide-y divide-[var(--border)]">
-            {CHAPTERS.map((ch) => {
+            {chapters.map((ch) => {
               const progress = progressMap[ch.slug];
               const isDone = progress?.isComplete;
               const hasProgress = progress && progress.percentage > 0;

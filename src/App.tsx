@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { NovelProvider } from './context/NovelContext';
 import { ReadingProvider } from './context/ReadingContext';
 import { Header } from './components/Header';
 import { MobileMenu } from './components/MobileMenu';
@@ -11,6 +12,7 @@ import { NovelIndexPage } from './pages/NovelIndexPage';
 import { NotesPage } from './pages/NotesPage';
 import { ReadingPage } from './pages/ReadingPage';
 import { AboutPage } from './pages/AboutPage';
+import { WriterStudioPage } from './pages/WriterStudioPage';
 
 // Auto scroll to top on route change (except when chapter restores position)
 function ScrollRestoration() {
@@ -35,6 +37,7 @@ function AnimatedRoutes() {
         <Route path="/" element={<HomePage />} />
         <Route path="/novel" element={<NovelIndexPage />} />
         <Route path="/novel/:slug" element={<ChapterPage />} />
+        <Route path="/studio" element={<WriterStudioPage />} />
         <Route path="/notes" element={<NotesPage />} />
         <Route path="/reading" element={<ReadingPage />} />
         <Route path="/about" element={<AboutPage />} />
@@ -47,18 +50,20 @@ function AnimatedRoutes() {
 export function App() {
   return (
     <BrowserRouter>
-      <ReadingProvider>
-        <ScrollRestoration />
-        <div className="min-h-screen flex flex-col justify-between bg-[var(--bg)] text-[var(--text)] transition-colors duration-200">
-          <div>
-            <Header />
-            <MobileMenu />
-            <TableOfContentsDrawer />
-            <AnimatedRoutes />
+      <NovelProvider>
+        <ReadingProvider>
+          <ScrollRestoration />
+          <div className="min-h-screen flex flex-col justify-between bg-[var(--bg)] text-[var(--text)] transition-colors duration-200">
+            <div>
+              <Header />
+              <MobileMenu />
+              <TableOfContentsDrawer />
+              <AnimatedRoutes />
+            </div>
+            <Footer />
           </div>
-          <Footer />
-        </div>
-      </ReadingProvider>
+        </ReadingProvider>
+      </NovelProvider>
     </BrowserRouter>
   );
 }

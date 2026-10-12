@@ -6,6 +6,15 @@ export const THEME_STORAGE_KEY = 'literary_reading_theme';
 export const PROGRESS_STORAGE_KEY = 'literary_reading_progress';
 export const FONT_STORAGE_KEY = 'literary_font_size';
 
+const getStoredChapters = () => {
+  if (typeof window === 'undefined') return CHAPTERS;
+  try {
+    const raw = localStorage.getItem('literary_novel_chapters');
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return CHAPTERS;
+};
+
 // Direct synchronous write to localStorage for guaranteed persistence during tab closing/unload
 export const directWriteProgress = (
   slug: string,
@@ -15,7 +24,8 @@ export const directWriteProgress = (
 ) => {
   if (typeof window === 'undefined') return;
   try {
-    const chapter = CHAPTERS.find((c) => c.slug === slug);
+    const chapters = getStoredChapters();
+    const chapter = chapters.find((c: any) => c.slug === slug);
     if (!chapter) return;
 
     const raw = localStorage.getItem(PROGRESS_STORAGE_KEY);
@@ -160,7 +170,8 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const saveProgress = (slug: string, percentage: number, scrollPosition: number, isComplete?: boolean) => {
-    const chapter = CHAPTERS.find((c) => c.slug === slug);
+    const chapters = getStoredChapters();
+    const chapter = chapters.find((c: any) => c.slug === slug);
     if (!chapter) return;
 
     const roundedPercentage = Math.min(100, Math.max(0, Math.round(percentage)));
