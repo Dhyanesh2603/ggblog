@@ -13,6 +13,9 @@ import { NotesPage } from './pages/NotesPage';
 import { ReadingPage } from './pages/ReadingPage';
 import { AboutPage } from './pages/AboutPage';
 import { WriterStudioPage } from './pages/WriterStudioPage';
+import { WriterDashboardPage } from './pages/WriterDashboardPage';
+import { ExplorePage } from './pages/ExplorePage';
+import { WriterProfilePage } from './pages/WriterProfilePage';
 
 // Instant wipe of browser data if ?clearData, ?reset, or ?clear=true is present in URL
 if (typeof window !== 'undefined') {
@@ -51,9 +54,14 @@ function AnimatedRoutes() {
     <main key={location.pathname} className="page-fade-in min-h-[75vh]">
       <Routes location={location}>
         <Route path="/" element={<HomePage />} />
+        <Route path="/dashboard" element={<WriterDashboardPage />} />
+        <Route path="/studio" element={<WriterStudioPage />} />
+        <Route path="/studio/:workId" element={<WriterStudioPage />} />
+        <Route path="/explore" element={<ExplorePage />} />
+        <Route path="/profile" element={<WriterProfilePage />} />
+        <Route path="/profile/:authorId" element={<WriterProfilePage />} />
         <Route path="/novel" element={<NovelIndexPage />} />
         <Route path="/novel/:slug" element={<ChapterPage />} />
-        <Route path="/studio" element={<WriterStudioPage />} />
         <Route path="/notes" element={<NotesPage />} />
         <Route path="/reading" element={<ReadingPage />} />
         <Route path="/about" element={<AboutPage />} />

@@ -1,5 +1,16 @@
 export type ReadingTheme = 'light' | 'dark' | 'paper';
 
+export type WorkType = 'novel' | 'short-story' | 'article' | 'poetry' | 'essay' | 'research';
+export type WorkStatus = 'draft' | 'published';
+export type TypesetStyle = 'classic' | 'minimal' | 'academic' | 'magazine';
+
+export interface Scene {
+  id: string;
+  title: string;
+  content: string; // Rich HTML or Markdown
+  wordCount: number;
+}
+
 export interface NovelMeta {
   title: string;
   subtitle: string;
@@ -11,6 +22,9 @@ export interface NovelMeta {
   coverQuote: string;
   synopsis: string;
   coverImage?: string;
+  category?: string;
+  epigraph?: string;
+  epigraphAttribution?: string;
 }
 
 export interface AuthorNote {
@@ -22,10 +36,12 @@ export interface AuthorNote {
 }
 
 export interface ChapterParagraph {
+  id?: number;
   text: string;
   noteId?: string; // links to an author note if applicable
   isDialogue?: boolean;
   isBreak?: boolean;
+  isAsterism?: boolean;
 }
 
 export interface Chapter {
@@ -43,10 +59,53 @@ export interface Chapter {
     quote: string;
     source: string;
   };
+  epigraphAttribution?: string;
+  estimatedReadingTime?: string;
   paragraphs: ChapterParagraph[];
+  scenes?: Scene[];
+  contentHtml?: string;
   notes?: AuthorNote[];
   nextSlug?: string;
   prevSlug?: string;
+}
+
+export interface Work {
+  id: string;
+  slug: string;
+  title: string;
+  subtitle?: string;
+  author: string;
+  type: WorkType;
+  status: WorkStatus;
+  year: string;
+  description: string;
+  synopsis?: string;
+  wordCount?: number;
+  heroExcerpt?: string;
+  coverImage?: string;
+  category: string;
+  chapters: Chapter[];
+  createdAt: number;
+  updatedAt: number;
+  estimatedTotalReadingTime: string;
+  readCount?: number;
+  likesCount?: number;
+}
+
+export interface WriterProfile {
+  name: string;
+  handle: string;
+  bio: string;
+  location: string;
+  avatarUrl?: string;
+  philosophy: string;
+  manifesto?: string;
+  penName?: string;
+  website?: string;
+  followerCount: number;
+  followersCount?: number;
+  isFollowing?: boolean;
+  categories: string[];
 }
 
 export interface ReadingProgressRecord {
@@ -75,5 +134,11 @@ export interface ReadingShelfItem {
   author: string;
   year?: string;
   isCurrentlyReading?: boolean;
-  reflection: string;
+  reflection?: string;
+  workId?: string;
+  totalChapters?: number;
+  completedChapters?: number;
+  progressPercentage?: number;
+  lastReadDate?: string;
+  status?: 'reading' | 'completed' | 'want_to_read';
 }

@@ -1,77 +1,168 @@
-import React, { useState, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { useNovel } from '../context/NovelContext';
-import { parseDocxFile } from '../utils/docxParser';
+import { TipTapEditor } from '../components/TipTapEditor';
+import { CreateWorkModal } from '../components/CreateWorkModal';
+import { ImportReviewModal } from '../components/ImportReviewModal';
+import { parseDocxFile, type ParseDocxResult, toRomanNumeral } from '../utils/docxParser';
 import { generateEpubBlob, downloadBlob } from '../utils/epubGenerator';
+import type { Chapter, ChapterParagraph, TypesetStyle, Work } from '../types/novel';
+
+type DeviceViewport = 'desktop' | 'tablet' | 'mobile' | 'kindle';
 
 export const WriterStudioPage: React.FC = () => {
+  const { workId: paramWorkId } = useParams<{ workId?: string }>();
   const {
-    novelMeta,
-    updateNovelField,
+    works,
+    activeWorkId,
+    setActiveWorkId,
+    currentWork,
+    togglePublishWork,
     chapters,
-    reorderChapters,
     addChapter,
     updateChapter,
     deleteChapter,
-    importDocxChapters,
-    resetToDefaultNovel,
-    isCustomized
+    duplicateChapter,
+    reorderChapters,
+    addSceneToChapter,
+    deleteScene,
+    importDocxChapters
   } = useNovel();
 
-  const [activeTab, setActiveTab] = useState<'chapters' | 'metadata' | 'editor'>('chapters');
-  const [selectedChapterId, setSelectedChapterId] = useState<number>(chapters[0]?.id || 1);
+  // If workId is provided in URL, switch to it
+  useEffect(() => {
+    if (paramWorkId && paramWorkId !== activeWorkId) {
+      const found = works.find((w) => w.id === paramWorkId);
+      if (found) {
+        setActiveWorkId(paramWorkId);
+      }
+    }
+  }, [paramWorkId, activeWorkId, works, setActiveWorkId]);
 
-  // DOCX Upload States
-  const [isParsingDocx, setIsParsingDocx] = useState(false);
-  const [docxSuccessMsg, setDocxSuccessMsg] = useState<string | null>(null);
-  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  // Selected Chapter State
+  const [selectedChapterId, setSelectedChapterId] = useState<number>(() => {
+    return chapters[0]?.id || 1;
+  });
 
-  // Drag and drop reordering states
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-
-  // EPUB generation state
-  const [isExportingEpub, setIsExportingEpub] = useState(false);
-
-  // File input ref
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const chapterDocxInputRef = useRef<HTMLInputElement>(null);
+  // Keep selected chapter valid if chapters change
+  useEffect(() => {
+    if (!chapters.find((c) => c.id === selectedChapterId)) {
+      if (chapters.length > 0) {
+        setSelectedChapterId(chapters[0].id);
+      }
+    }
+  }, [chapters, selectedChapterId]);
 
   const selectedChapter = chapters.find((c) => c.id === selectedChapterId) || chapters[0];
 
-  // Handle Full Manuscript DOCX Upload
-  const handleDocxUpload = async (file: File) => {
+  // Helper to extract epigraph text & source safely
+  const getEpigraphQuote = (ch?: Chapter): string => {
+    if (!ch || !ch.epigraph) return '';
+    if (typeof ch.epigraph === 'string') return ch.epigraph;
+    return ch.epigraph.quote || '';
+  };
+
+  const getEpigraphSource = (ch?: Chapter): string => {
+    if (!ch) return '';
+    if (typeof ch.epigraph === 'object' && ch.epigraph?.source) {
+      return ch.epigraph.source;
+    }
+    return ch.epigraphAttribution || '';
+  };
+
+  const getWorkWordCount = (w: Work): number => {
+    if (w.wordCount) return w.wordCount;
+    return w.chapters.reduce((sum, c) => sum + (c.wordCount || 0), 0);
+  };
+
+  // Panel visibility
+  const [showLeftOutline, setShowLeftOutline] = useState(true);
+  const [showRightPreview, setShowRightPreview] = useState(true);
+  const [isZenMode, setIsZenMode] = useState(false);
+
+  // Preview options
+  const [previewDevice, setPreviewDevice] = useState<DeviceViewport>('kindle');
+  const [previewStyle, setPreviewStyle] = useState<TypesetStyle>('classic');
+
+  // Drag-and-drop chapter states
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  // Modals & Upload
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [pendingParsedDocx, setPendingParsedDocx] = useState<ParseDocxResult | null>(null);
+  const [isParsingDocx, setIsParsingDocx] = useState(false);
+  const [isExportingEpub, setIsExportingEpub] = useState(false);
+
+  // Inline rename chapter state
+  const [editingChapterTitleId, setEditingChapterTitleId] = useState<number | null>(null);
+  const [inlineChapterTitle, setInlineChapterTitle] = useState('');
+
+  // Refs
+  const manuscriptFileInputRef = useRef<HTMLInputElement>(null);
+  const singleChapterFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Global Keyboard Shortcuts (Zen Mode toggle via F, Escape to exit)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInput =
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable;
+
+      if (e.key === 'Escape' && isZenMode) {
+        setIsZenMode(false);
+        return;
+      }
+
+      if (e.key === 'f' || e.key === 'F') {
+        if (!isInput && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault();
+          setIsZenMode((prev) => !prev);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isZenMode]);
+
+  // Handle Full Manuscript DOCX
+  const handleFullDocxFile = async (file: File) => {
     if (!file.name.endsWith('.docx')) {
       alert('Please upload a valid Microsoft Word (.docx) file.');
       return;
     }
-
     try {
       setIsParsingDocx(true);
-      setDocxSuccessMsg(null);
       const parsed = await parseDocxFile(file);
-
       if (parsed.chapters.length === 0) {
-        alert('Could not detect any chapters in this file. Please ensure text is present.');
+        alert('Could not detect any chapter divisions or text in this document.');
         return;
       }
-
-      importDocxChapters(parsed.chapters, parsed.detectedNovelTitle, parsed.detectedAuthor);
-      setDocxSuccessMsg(
-        `Successfully imported ${parsed.chapters.length} chapter(s) (${parsed.chapters
-          .reduce((a, b) => a + b.wordCount, 0)
-          .toLocaleString()} words).`
-      );
-      setSelectedChapterId(1);
+      setPendingParsedDocx(parsed);
+      setIsImportModalOpen(true);
     } catch (err) {
-      console.error('Error parsing DOCX', err);
-      alert('An error occurred while parsing the .docx file. Ensure it is a valid Word document.');
+      console.error('Docx parse error', err);
+      alert('Error parsing DOCX file.');
     } finally {
       setIsParsingDocx(false);
     }
   };
 
-  // Handle Per-Chapter DOCX Upload
+  // Confirm Import
+  const handleConfirmImport = (importedChapters: Chapter[], title?: string, author?: string) => {
+    importDocxChapters(importedChapters, title, author);
+    if (importedChapters[0]) {
+      setSelectedChapterId(importedChapters[0].id);
+    }
+    setIsImportModalOpen(false);
+    setPendingParsedDocx(null);
+  };
+
+  // Handle Single Chapter DOCX Replacement
   const handleSingleChapterDocx = async (file: File) => {
     if (!selectedChapter) return;
     try {
@@ -82,9 +173,10 @@ export const WriterStudioPage: React.FC = () => {
         updateChapter(selectedChapter.id, {
           title: first.title !== 'Chapter I' ? first.title : selectedChapter.title,
           epigraph: first.epigraph || selectedChapter.epigraph,
-          paragraphs: first.paragraphs
+          paragraphs: first.paragraphs,
+          contentHtml: first.contentHtml
         });
-        alert(`Imported ${first.paragraphs.length} paragraphs into ${selectedChapter.title}.`);
+        alert(`Successfully imported content into ${selectedChapter.title}.`);
       }
     } catch (e) {
       console.error(e);
@@ -94,648 +186,856 @@ export const WriterStudioPage: React.FC = () => {
     }
   };
 
-  // Handle Drag & Drop Reordering
-  const handleDragStart = (index: number) => {
-    setDraggedIndex(index);
+  // Drag and drop handlers
+  const handleDragStart = (idx: number) => {
+    setDraggedIndex(idx);
   };
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
-    setDragOverIndex(index);
+    setDragOverIndex(idx);
   };
 
-  const handleDrop = (index: number) => {
-    if (draggedIndex !== null && draggedIndex !== index) {
-      reorderChapters(draggedIndex, index);
+  const handleDrop = (idx: number) => {
+    if (draggedIndex !== null && draggedIndex !== idx) {
+      reorderChapters(draggedIndex, idx);
     }
     setDraggedIndex(null);
     setDragOverIndex(null);
   };
 
-  // Handle EPUB Export
+  // Export EPUB
   const handleExportEpub = async () => {
     try {
       setIsExportingEpub(true);
-      const blob = await generateEpubBlob(novelMeta, chapters);
-      const safeTitle = novelMeta.title.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const totalWords = getWorkWordCount(currentWork);
+      const epQuote = getEpigraphQuote(chapters[0]);
+      const epSource = getEpigraphSource(chapters[0]);
+
+      const meta = {
+        title: currentWork.title,
+        subtitle: currentWork.subtitle || '',
+        author: currentWork.author,
+        year: currentWork.year || '2026',
+        totalChapters: chapters.length,
+        estimatedTotalReadingTime: `${Math.ceil(totalWords / 225)} min`,
+        heroExcerpt: currentWork.heroExcerpt || currentWork.description || '',
+        coverQuote: currentWork.heroExcerpt || currentWork.title,
+        synopsis: currentWork.synopsis || currentWork.description || '',
+        coverImage: currentWork.coverImage,
+        epigraph: epQuote,
+        epigraphAttribution: epSource
+      };
+      const blob = await generateEpubBlob(meta, chapters);
+      const safeTitle = currentWork.title.replace(/[^a-zA-Z0-9_-]/g, '_');
       downloadBlob(blob, `${safeTitle}_Edition.epub`);
     } catch (e) {
-      console.error('EPUB Generation error', e);
-      alert('Could not generate EPUB. Please try again.');
+      console.error('EPUB Error', e);
+      alert('Could not package EPUB file.');
     } finally {
       setIsExportingEpub(false);
     }
   };
 
-  // Handle Print Edition PDF
-  const handlePrint = () => {
-    window.print();
+  // Export Markdown
+  const handleExportMarkdown = () => {
+    let md = `# ${currentWork.title}\n`;
+    if (currentWork.subtitle) md += `*${currentWork.subtitle}*\n\n`;
+    md += `**Author:** ${currentWork.author}\n\n`;
+    const syn = currentWork.synopsis || currentWork.description;
+    if (syn) md += `> ${syn}\n\n`;
+    md += `---\n\n`;
+
+    chapters.forEach((ch, idx) => {
+      md += `## Chapter ${toRomanNumeral(idx + 1)}: ${ch.title}\n\n`;
+      const q = getEpigraphQuote(ch);
+      const s = getEpigraphSource(ch);
+      if (q) {
+        md += `> "${q}"\n`;
+        if (s) md += `> — *${s}*\n`;
+        md += `\n`;
+      }
+      ch.paragraphs.forEach((p) => {
+        md += `${p.text}\n\n`;
+      });
+      md += `\n---\n\n`;
+    });
+
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    downloadBlob(blob, `${currentWork.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.md`);
+  };
+
+  // Export Plain Text
+  const handleExportPlainText = () => {
+    let txt = `${currentWork.title}\nBy ${currentWork.author}\n\n====================\n\n`;
+    chapters.forEach((ch, idx) => {
+      txt += `CHAPTER ${toRomanNumeral(idx + 1)}: ${ch.title.toUpperCase()}\n\n`;
+      const q = getEpigraphQuote(ch);
+      const s = getEpigraphSource(ch);
+      if (q) {
+        txt += `"${q}"\n— ${s}\n\n`;
+      }
+      ch.paragraphs.forEach((p) => {
+        txt += `${p.text}\n\n`;
+      });
+      txt += `\n* * *\n\n`;
+    });
+    const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+    downloadBlob(blob, `${currentWork.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.txt`);
+  };
+
+  // Convert current selected chapter HTML content for initial TipTap
+  const getChapterInitialHtml = (ch?: Chapter): string => {
+    if (!ch) return '<p>Begin drafting chapter...</p>';
+    if (ch.contentHtml) return ch.contentHtml;
+    if (ch.paragraphs && ch.paragraphs.length > 0) {
+      return ch.paragraphs
+        .map((p) => {
+          if (p.isAsterism) return '<div class="editorial-asterism text-center my-6">※</div>';
+          return `<p>${p.text}</p>`;
+        })
+        .join('');
+    }
+    return '<p>Begin writing prose here...</p>';
+  };
+
+  // Handle TipTap content updates
+  const handleEditorUpdate = (html: string, _plainText: string, words: number, _chars: number) => {
+    if (!selectedChapter) return;
+
+    // Convert HTML back into paragraphs for backward compatibility & reading mode
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    const pElements = Array.from(tempDiv.querySelectorAll('p, div.editorial-asterism, blockquote, h1, h2, h3'));
+
+    const updatedParagraphs: ChapterParagraph[] = pElements.map((el, i) => {
+      const isAst = el.textContent?.trim() === '※' || el.classList.contains('editorial-asterism');
+      return {
+        id: i + 1,
+        text: el.textContent || '',
+        isAsterism: isAst
+      };
+    });
+
+    updateChapter(selectedChapter.id, {
+      contentHtml: html,
+      paragraphs: updatedParagraphs.length > 0 ? updatedParagraphs : [{ id: 1, text: tempDiv.innerText || '' }],
+      wordCount: words,
+      estimatedReadingTime: `${Math.ceil(words / 225)} min`,
+      readingTimeMin: Math.ceil(words / 225)
+    });
   };
 
   return (
-    <div className="w-full relative min-h-screen pb-32">
-      {/* 1. STUDIO HEADER */}
-      <header className="border-b border-[var(--border)] bg-[var(--paper-tint)]/40 py-8">
-        <div className="editorial-container">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                <span className="font-mono-meta text-[10px] tracking-[0.2em] text-[var(--text-muted)]">
-                  WRITER STUDIO · CREATOR WORKSPACE
-                </span>
-                {isCustomized && (
-                  <span className="font-mono-meta text-[9px] px-2 py-0.5 border border-[var(--border)] text-[var(--text)]">
-                    CUSTOM NOVEL ACTIVE
-                  </span>
-                )}
-              </div>
-              <h1 className="font-editorial-title text-4xl sm:text-5xl text-[var(--text)] tracking-tight">
-                {novelMeta.title}
-              </h1>
-              <p className="font-editorial-body text-base italic text-[var(--text-muted)]">
-                by {novelMeta.author} · {chapters.length} Chapters
-              </p>
-            </div>
+    <div className="w-full min-h-screen bg-[var(--bg)] text-[var(--text)] flex flex-col">
+      {/* Hidden inputs */}
+      <input
+        ref={manuscriptFileInputRef}
+        type="file"
+        accept=".docx"
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files && e.target.files[0]) {
+            handleFullDocxFile(e.target.files[0]);
+            e.target.value = '';
+          }
+        }}
+      />
+      <input
+        ref={singleChapterFileInputRef}
+        type="file"
+        accept=".docx"
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files && e.target.files[0]) {
+            handleSingleChapterDocx(e.target.files[0]);
+            e.target.value = '';
+          }
+        }}
+      />
 
-            {/* Studio Header Actions */}
-            <div className="flex flex-wrap items-center gap-3">
-              <Link
-                to="/novel"
-                className="font-mono-meta text-xs tracking-[0.16em] px-4 py-2.5 border border-[var(--text)] hover:bg-[var(--text)] hover:text-[var(--bg)] transition-colors"
-              >
-                PREVIEW LIVE BOOK →
-              </Link>
-
-              <button
-                type="button"
-                onClick={handleExportEpub}
-                disabled={isExportingEpub}
-                className="font-mono-meta text-xs tracking-[0.16em] px-4 py-2.5 bg-[var(--text)] text-[var(--bg)] hover:opacity-85 transition-opacity disabled:opacity-50 cursor-pointer"
-              >
-                {isExportingEpub ? 'PACKAGING EPUB...' : 'EXPORT EPUB ↓'}
-              </button>
-
-              <button
-                type="button"
-                onClick={handlePrint}
-                className="font-mono-meta text-xs tracking-[0.16em] px-4 py-2.5 border border-[var(--border)] hover:border-[var(--text)] transition-colors cursor-pointer"
-                title="Print or Save as Book PDF"
-              >
-                PRINT / PDF ⎙
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (confirm('Wipe ALL browser storage (reading progress, custom manuscripts, themes, font settings) and reload pristine default state?')) {
-                    localStorage.clear();
-                    sessionStorage.clear();
-                    window.location.reload();
-                  }
-                }}
-                className="font-mono-meta text-[10px] text-[var(--text-faint)] hover:text-red-700 underline px-2 cursor-pointer transition-colors"
-                title="Wipes all localStorage and reloads pristine project defaults"
-              >
-                Clear All Data ↺
-              </button>
-
-              {isCustomized && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm('Reset back to Julian Thorne’s "The Last Light"? Any custom changes will be replaced.')) {
-                      resetToDefaultNovel();
-                    }
-                  }}
-                  className="font-mono-meta text-[10px] text-[var(--text-faint)] hover:text-[var(--text)] underline px-2 cursor-pointer"
-                >
-                  Reset Demo
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Navigation Tabs */}
-          <div className="flex items-center gap-8 border-t border-[var(--border-faint)] mt-8 pt-4 font-mono-meta text-xs tracking-[0.14em]">
-            <button
-              type="button"
-              onClick={() => setActiveTab('chapters')}
-              className={`pb-2 transition-all cursor-pointer ${
-                activeTab === 'chapters'
-                  ? 'border-b-2 border-[var(--text)] text-[var(--text)] font-semibold'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-              }`}
+      {/* 1. TOP STUDIO NAVIGATION & TOOLBAR (Hidden in Zen Mode) */}
+      {!isZenMode && (
+        <header className="border-b border-[var(--border)] bg-[var(--paper-tint)]/40 px-4 py-2.5 flex items-center justify-between gap-4 sticky top-14 md:top-16 z-30">
+          {/* Left: Work Selector & Status */}
+          <div className="flex items-center gap-3 min-w-0">
+            <Link
+              to="/dashboard"
+              className="font-mono-meta text-[10px] tracking-[0.14em] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors flex items-center gap-1.5 shrink-0"
+              title="Return to Writer Dashboard"
             >
-              1. MANUSCRIPT & CHAPTERS ({chapters.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('editor')}
-              className={`pb-2 transition-all cursor-pointer ${
-                activeTab === 'editor'
-                  ? 'border-b-2 border-[var(--text)] text-[var(--text)] font-semibold'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-              }`}
-            >
-              2. CHAPTER PROSE EDITOR
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('metadata')}
-              className={`pb-2 transition-all cursor-pointer ${
-                activeTab === 'metadata'
-                  ? 'border-b-2 border-[var(--text)] text-[var(--text)] font-semibold'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-              }`}
-            >
-              3. NOVEL FOLIO DETAILS
-            </button>
-          </div>
-        </div>
-      </header>
+              <span>←</span>
+              <span className="hidden sm:inline">DASHBOARD</span>
+            </Link>
 
-      {/* 2. TAB CONTENT */}
-      <div className="editorial-container pt-10">
-        {/* TAB 1: MANUSCRIPT & CHAPTERS (Drag & Drop Reordering + DOCX Upload) */}
-        {activeTab === 'chapters' && (
-          <div className="space-y-12">
-            {/* DOCX Upload Area */}
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDraggingOver(true);
-              }}
-              onDragLeave={() => setIsDraggingOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setIsDraggingOver(false);
-                if (e.dataTransfer.files?.[0]) {
-                  handleDocxUpload(e.dataTransfer.files[0]);
-                }
-              }}
-              className={`p-8 sm:p-12 border-2 border-dashed transition-all text-center space-y-4 rounded-[2px] ${
-                isDraggingOver
-                  ? 'border-[var(--text)] bg-[var(--paper-tint)]'
-                  : 'border-[var(--border)] bg-[var(--paper-tint)]/30 hover:border-[var(--text)]'
-              }`}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".docx"
-                className="hidden"
+            <span className="text-[var(--border)]">/</span>
+
+            {/* Work Title Selector Dropdown */}
+            <div className="relative flex items-center gap-2 min-w-0">
+              <select
+                value={activeWorkId}
                 onChange={(e) => {
-                  if (e.target.files?.[0]) {
-                    handleDocxUpload(e.target.files[0]);
+                  if (e.target.value === '__NEW__') {
+                    setIsCreateModalOpen(true);
+                  } else {
+                    setActiveWorkId(e.target.value);
                   }
                 }}
-              />
+                className="font-editorial-title text-base sm:text-lg font-medium text-[var(--text)] bg-transparent border-b border-transparent hover:border-[var(--border)] focus:outline-none cursor-pointer truncate max-w-[180px] sm:max-w-[280px]"
+              >
+                {works.map((w) => (
+                  <option key={w.id} value={w.id} className="bg-[var(--bg)] text-[var(--text)] font-sans text-xs">
+                    {w.title} ({w.type})
+                  </option>
+                ))}
+                <option value="__NEW__" className="bg-[var(--bg)] text-[var(--text)] font-sans text-xs font-semibold">
+                  + Create New Work...
+                </option>
+              </select>
 
-              <div className="w-12 h-12 mx-auto rounded-full border border-[var(--border)] flex items-center justify-center font-editorial-title text-2xl text-[var(--text)]">
-                ※
+              {/* Status pill */}
+              <button
+                type="button"
+                onClick={() => togglePublishWork(currentWork.id)}
+                className={`font-mono-meta text-[9px] px-2 py-0.5 border transition-colors shrink-0 cursor-pointer ${
+                  currentWork.status === 'published'
+                    ? 'border-[var(--text)] bg-[var(--text)] text-[var(--bg)] font-medium'
+                    : 'border-dashed border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)]'
+                }`}
+                title="Click to toggle Draft / Published"
+              >
+                {currentWork.status === 'published' ? 'PUBLISHED' : 'DRAFT'}
+              </button>
+            </div>
+          </div>
+
+          {/* Center: Quick Panel Toggles */}
+          <div className="hidden lg:flex items-center gap-1 border border-[var(--border)] p-0.5 bg-[var(--bg)]">
+            <button
+              type="button"
+              onClick={() => setShowLeftOutline(!showLeftOutline)}
+              className={`font-mono-meta text-[9.5px] px-2.5 py-1 transition-colors cursor-pointer ${
+                showLeftOutline
+                  ? 'bg-[var(--text)] text-[var(--bg)] font-medium'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+              }`}
+              title="Toggle Scrivener Outline Panel"
+            >
+              OUTLINE
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowRightPreview(!showRightPreview)}
+              className={`font-mono-meta text-[9.5px] px-2.5 py-1 transition-colors cursor-pointer ${
+                showRightPreview
+                  ? 'bg-[var(--text)] text-[var(--bg)] font-medium'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+              }`}
+              title="Toggle Real-time Book Preview Panel"
+            >
+              PREVIEW
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsZenMode(true)}
+              className="font-mono-meta text-[9.5px] px-2.5 py-1 text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--highlight)] transition-colors cursor-pointer"
+              title="Zen Mode (Shortcut: F)"
+            >
+              ZEN (F)
+            </button>
+          </div>
+
+          {/* Right: Actions */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* DOCX Import Button */}
+            <button
+              type="button"
+              onClick={() => manuscriptFileInputRef.current?.click()}
+              disabled={isParsingDocx}
+              className="font-mono-meta text-[10px] tracking-[0.12em] px-2.5 py-1.5 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text)] transition-colors cursor-pointer disabled:opacity-50"
+              title="Import Microsoft Word .docx Manuscript"
+            >
+              {isParsingDocx ? 'PARSING...' : 'IMPORT DOCX'}
+            </button>
+
+            {/* Export EPUB Button */}
+            <button
+              type="button"
+              onClick={handleExportEpub}
+              disabled={isExportingEpub}
+              className="hidden sm:inline-block font-mono-meta text-[10px] tracking-[0.12em] px-3 py-1.5 bg-[var(--text)] text-[var(--bg)] hover:opacity-85 transition-opacity disabled:opacity-50 cursor-pointer"
+            >
+              {isExportingEpub ? 'PACKAGING...' : 'EPUB 3 ↓'}
+            </button>
+
+            {/* Print / PDF Button */}
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="hidden md:inline-block font-mono-meta text-[10px] tracking-[0.12em] px-2.5 py-1.5 border border-[var(--border)] hover:border-[var(--text)] transition-colors cursor-pointer"
+              title="Typeset Print PDF"
+            >
+              PRINT ⎙
+            </button>
+
+            {/* Reader Preview Link */}
+            <Link
+              to="/novel"
+              className="font-mono-meta text-[10px] tracking-[0.12em] px-2.5 py-1.5 border border-[var(--border)] hover:border-[var(--text)] transition-colors"
+              title="Open Reader Experience"
+            >
+              READ →
+            </Link>
+          </div>
+        </header>
+      )}
+
+      {/* ZEN MODE FLOATING CONTROLS */}
+      {isZenMode && (
+        <div className="fixed top-4 right-6 z-50 flex items-center gap-3 bg-[var(--bg)] border border-[var(--border)] px-3 py-1.5 shadow-md">
+          <span className="font-mono-meta text-[10px] tracking-widest text-[var(--text-muted)]">
+            ZEN MODE · PRESS ESC OR F TO EXIT
+          </span>
+          <button
+            type="button"
+            onClick={() => setIsZenMode(false)}
+            className="font-mono-meta text-[10px] text-[var(--text)] px-2 py-0.5 border border-[var(--border)] hover:bg-[var(--text)] hover:text-[var(--bg)] transition-colors cursor-pointer"
+          >
+            EXIT [×]
+          </button>
+        </div>
+      )}
+
+      {/* 2. MAIN THREE-PANEL WRITING WORKSPACE */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* ========================================================== */}
+        {/* PANEL 1: LEFT CHAPTER MANAGEMENT (SCRIVENER OUTLINE TREE)  */}
+        {/* ========================================================== */}
+        {showLeftOutline && !isZenMode && (
+          <aside className="w-72 sm:w-80 border-r border-[var(--border)] bg-[var(--paper-tint)]/25 flex flex-col shrink-0 h-[calc(100vh-6.5rem)] overflow-y-auto">
+            {/* Outline Header */}
+            <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
+              <div>
+                <span className="font-mono-meta text-[9.5px] tracking-[0.18em] text-[var(--text-muted)] block uppercase">
+                  MANUSCRIPT TREE
+                </span>
+                <span className="font-editorial-body text-xs italic text-[var(--text-faint)]">
+                  {chapters.length} chapters · {getWorkWordCount(currentWork).toLocaleString()} words
+                </span>
               </div>
-
-              <div className="space-y-1 max-w-lg mx-auto">
-                <h3 className="font-editorial-title text-2xl sm:text-3xl text-[var(--text)]">
-                  Import Word Document (.docx)
-                </h3>
-                <p className="font-editorial-body text-sm sm:text-base text-[var(--text-muted)]">
-                  Drag and drop your manuscript file here. Our rule-based parser automatically detects chapter headings, epigraphs, dialogue, and asterisms.
-                </p>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isParsingDocx}
-                  className="font-mono-meta text-xs tracking-[0.16em] px-6 py-3 bg-[var(--text)] text-[var(--bg)] hover:opacity-85 transition-opacity disabled:opacity-50 cursor-pointer shadow-sm"
-                >
-                  {isParsingDocx ? 'PARSING MANUSCRIPT...' : 'SELECT .DOCX FILE'}
-                </button>
-              </div>
-
-              {docxSuccessMsg && (
-                <div className="p-3 bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono-meta text-xs max-w-md mx-auto">
-                  {docxSuccessMsg}
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => addChapter()}
+                className="font-mono-meta text-[10px] tracking-[0.14em] px-2.5 py-1 bg-[var(--text)] text-[var(--bg)] hover:opacity-85 transition-opacity cursor-pointer"
+                title="Add New Chapter"
+              >
+                + CHAPTER
+              </button>
             </div>
 
-            {/* Chapters Table with Drag and Drop */}
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--border)]">
-                <div>
-                  <h3 className="font-editorial-title text-3xl text-[var(--text)]">
-                    Manuscript Chapters
-                  </h3>
-                  <p className="font-mono-meta text-[10px] text-[var(--text-muted)] tracking-[0.14em]">
-                    DRAG ANY ROW TO REORDER · OR USE THE UP/DOWN CONTROLS
-                  </p>
-                </div>
+            {/* Chapters & Scenes Drag-and-Drop List */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+              {chapters.map((ch, idx) => {
+                const isSelected = ch.id === selectedChapter?.id;
+                const roman = toRomanNumeral(idx + 1);
+                const isBeingDragged = draggedIndex === idx;
+                const isDragOver = dragOverIndex === idx;
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    const newCh = addChapter('New Folio');
-                    setSelectedChapterId(newCh.id);
-                    setActiveTab('editor');
-                  }}
-                  className="font-mono-meta text-xs tracking-[0.14em] px-4 py-2.5 border border-[var(--text)] hover:bg-[var(--text)] hover:text-[var(--bg)] transition-colors cursor-pointer self-start sm:self-auto"
-                >
-                  + ADD NEW CHAPTER
-                </button>
-              </div>
-
-              {/* Chapter Rows */}
-              <div className="divide-y divide-[var(--border)]">
-                {chapters.map((ch, index) => {
-                  const isBeingDragged = draggedIndex === index;
-                  const isDragTarget = dragOverIndex === index;
-
-                  return (
+                return (
+                  <div
+                    key={ch.id}
+                    draggable
+                    onDragStart={() => handleDragStart(idx)}
+                    onDragOver={(e) => handleDragOver(e, idx)}
+                    onDrop={() => handleDrop(idx)}
+                    className={`group rounded-none border transition-all duration-150 ${
+                      isSelected
+                        ? 'border-[var(--text)] bg-[var(--bg)] shadow-xs'
+                        : 'border-transparent hover:border-[var(--border)] bg-transparent'
+                    } ${isBeingDragged ? 'opacity-40' : ''} ${
+                      isDragOver ? 'border-t-2 border-t-[var(--text)]' : ''
+                    }`}
+                  >
+                    {/* Chapter Row */}
                     <div
-                      key={ch.id}
-                      draggable
-                      onDragStart={() => handleDragStart(index)}
-                      onDragOver={(e) => handleDragOver(e, index)}
-                      onDrop={() => handleDrop(index)}
-                      className={`group py-4 sm:py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
-                        isBeingDragged ? 'opacity-30' : ''
-                      } ${isDragTarget ? 'border-t-2 border-[var(--text)] bg-[var(--paper-tint)]/60' : ''}`}
+                      onClick={() => setSelectedChapterId(ch.id)}
+                      className="p-2.5 flex items-start justify-between gap-2 cursor-pointer"
                     >
-                      {/* Left: Drag Grip & Number & Title */}
-                      <div className="flex items-center gap-4 sm:gap-6 min-w-0">
-                        {/* Drag Handle ⠿ */}
-                        <div
-                          className="cursor-grab active:cursor-grabbing p-1.5 text-[var(--text-faint)] group-hover:text-[var(--text)] transition-colors select-none"
-                          title="Drag handle: click and hold to reorder"
+                      <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                        {/* Drag Handle */}
+                        <span
+                          className="text-[var(--text-faint)] hover:text-[var(--text)] cursor-grab active:cursor-grabbing font-mono text-xs select-none pt-0.5"
+                          title="Drag to reorder"
                         >
-                          <span className="font-mono text-base leading-none block">⠿</span>
-                        </div>
-
-                        {/* Reorder Up/Down arrows for mobile/touch */}
-                        <div className="flex flex-col gap-0.5">
-                          <button
-                            type="button"
-                            disabled={index === 0}
-                            onClick={() => reorderChapters(index, index - 1)}
-                            className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text)] disabled:opacity-20 cursor-pointer"
-                            title="Move chapter up"
-                          >
-                            ▲
-                          </button>
-                          <button
-                            type="button"
-                            disabled={index === chapters.length - 1}
-                            onClick={() => reorderChapters(index, index + 1)}
-                            className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text)] disabled:opacity-20 cursor-pointer"
-                            title="Move chapter down"
-                          >
-                            ▼
-                          </button>
-                        </div>
-
-                        {/* Index display badge */}
-                        <span className="font-mono-meta text-xs text-[var(--text-faint)] w-7">
-                          {ch.numberDisplay}
+                          ⠿
                         </span>
 
-                        <div className="min-w-0">
-                          <h4 className="font-editorial-title text-2xl sm:text-3xl text-[var(--text)] truncate">
-                            <span className="font-mono-meta text-sm text-[var(--text-muted)] mr-3 font-normal">
-                              {ch.numberRoman}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono-meta text-[9px] tracking-widest text-[var(--text-muted)] font-semibold shrink-0">
+                              {roman}
                             </span>
-                            <span>{ch.title}</span>
-                          </h4>
-                          <span className="font-mono-meta text-[10px] text-[var(--text-faint)] block mt-0.5">
-                            {ch.subtitle ? `${ch.subtitle} · ` : ''}{ch.wordCount.toLocaleString()} WORDS · ~{ch.readingTimeMin} MIN READ
-                          </span>
+                            {editingChapterTitleId === ch.id ? (
+                              <input
+                                type="text"
+                                value={inlineChapterTitle}
+                                autoFocus
+                                onChange={(e) => setInlineChapterTitle(e.target.value)}
+                                onBlur={() => {
+                                  if (inlineChapterTitle.trim()) {
+                                    updateChapter(ch.id, { title: inlineChapterTitle.trim() });
+                                  }
+                                  setEditingChapterTitleId(null);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    if (inlineChapterTitle.trim()) {
+                                      updateChapter(ch.id, { title: inlineChapterTitle.trim() });
+                                    }
+                                    setEditingChapterTitleId(null);
+                                  } else if (e.key === 'Escape') {
+                                    setEditingChapterTitleId(null);
+                                  }
+                                }}
+                                className="font-editorial-title text-sm border-b border-[var(--text)] bg-transparent px-1 focus:outline-none w-full"
+                              />
+                            ) : (
+                              <span
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingChapterTitleId(ch.id);
+                                  setInlineChapterTitle(ch.title);
+                                }}
+                                className={`font-editorial-title text-sm truncate block leading-snug ${
+                                  isSelected ? 'text-[var(--text)] font-semibold' : 'text-[var(--text-muted)]'
+                                }`}
+                                title="Double click to rename"
+                              >
+                                {ch.title}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 font-mono-meta text-[8.5px] text-[var(--text-faint)] mt-1">
+                            <span>{ch.wordCount || 0} w</span>
+                            <span>·</span>
+                            <span>{ch.readingTimeMin || 1}m read</span>
+                            {ch.scenes && ch.scenes.length > 0 && (
+                              <>
+                                <span>·</span>
+                                <span>{ch.scenes.length} scenes</span>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      {/* Right: Actions */}
-                      <div className="flex items-center gap-3 pl-12 sm:pl-0">
+                      {/* Row actions */}
+                      <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity pt-0.5">
                         <button
                           type="button"
-                          onClick={() => {
-                            setSelectedChapterId(ch.id);
-                            setActiveTab('editor');
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addSceneToChapter(ch.id);
                           }}
-                          className="font-mono-meta text-xs tracking-[0.14em] px-3.5 py-1.5 border border-[var(--border)] hover:border-[var(--text)] transition-colors cursor-pointer"
+                          className="font-mono-meta text-[9px] text-[var(--text-muted)] hover:text-[var(--text)] px-1"
+                          title="Add Scene"
                         >
-                          EDIT PROSE
+                          +SCENE
                         </button>
-
-                        <Link
-                          to={`/novel/${ch.slug}`}
-                          className="font-mono-meta text-xs tracking-[0.14em] px-3.5 py-1.5 border border-[var(--border)] hover:bg-[var(--text)] hover:text-[var(--bg)] transition-colors"
-                        >
-                          READ →
-                        </Link>
-
                         <button
                           type="button"
-                          onClick={() => {
-                            if (confirm(`Delete "${ch.title}"?`)) {
-                              deleteChapter(ch.id);
-                            }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            duplicateChapter(ch.id);
                           }}
-                          disabled={chapters.length <= 1}
-                          className="text-[var(--text-faint)] hover:text-red-700 p-1.5 transition-colors disabled:opacity-20 cursor-pointer text-xs"
-                          title="Delete Chapter"
+                          className="font-mono-meta text-[9px] text-[var(--text-muted)] hover:text-[var(--text)] px-1"
+                          title="Duplicate chapter"
                         >
-                          ✕
+                          DUP
                         </button>
+                        {chapters.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(`Delete "${ch.title}"?`)) {
+                                deleteChapter(ch.id);
+                              }
+                            }}
+                            className="font-mono-meta text-[9px] text-[var(--text-faint)] hover:text-red-700 px-1"
+                            title="Delete chapter"
+                          >
+                            ×
+                          </button>
+                        )}
                       </div>
                     </div>
-                  );
-                })}
+
+                    {/* Nested Scenes (Scrivener Style) */}
+                    {ch.scenes && ch.scenes.length > 0 && (
+                      <div className="ml-7 pr-2 pb-2 space-y-1 border-l border-[var(--border)]/60 pl-2">
+                        {ch.scenes.map((sc, sIdx) => (
+                          <div
+                            key={sc.id}
+                            className="group/sc flex items-center justify-between text-xs py-1 px-1.5 hover:bg-[var(--highlight)] text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer"
+                          >
+                            <span className="font-editorial-body text-xs truncate">
+                              § {sIdx + 1}. {sc.title}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteScene(ch.id, sc.id);
+                              }}
+                              className="opacity-0 group-hover/sc:opacity-100 text-[10px] text-[var(--text-faint)] hover:text-red-700"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Sidebar Bottom Drawer: Chapter Replacement & Shortcuts */}
+            <div className="p-3 border-t border-[var(--border)] bg-[var(--bg)] space-y-2">
+              <button
+                type="button"
+                onClick={() => singleChapterFileInputRef.current?.click()}
+                className="w-full font-mono-meta text-[9.5px] tracking-wider py-1.5 px-2 border border-dashed border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors text-center block cursor-pointer"
+              >
+                REPLACE THIS CHAPTER VIA DOCX ↑
+              </button>
+              <div className="font-mono-meta text-[8.5px] text-[var(--text-faint)] text-center">
+                Drag handles (⠿) to reorder · Double-click to rename
               </div>
             </div>
-          </div>
+          </aside>
         )}
 
-        {/* TAB 2: CHAPTER PROSE EDITOR */}
-        {activeTab === 'editor' && (
-          <div className="space-y-8 max-w-4xl">
-            {/* Chapter Selector Dropdown */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[var(--border)]">
-              <div className="flex items-center gap-3">
-                <span className="font-mono-meta text-xs tracking-[0.14em] text-[var(--text-muted)]">
-                  ACTIVE CHAPTER:
-                </span>
-                <select
-                  value={selectedChapter?.id}
-                  onChange={(e) => setSelectedChapterId(Number(e.target.value))}
-                  className="bg-[var(--bg)] text-[var(--text)] border border-[var(--border)] px-3 py-1.5 font-editorial-body text-base outline-none cursor-pointer"
-                >
-                  {chapters.map((ch) => (
-                    <option key={ch.id} value={ch.id}>
-                      {ch.numberDisplay} — {ch.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
+        {/* ========================================================== */}
+        {/* PANEL 2: CENTER RICH WRITING EDITOR                        */}
+        {/* ========================================================== */}
+        <main className="flex-1 flex flex-col h-[calc(100vh-6.5rem)] overflow-y-auto bg-[var(--bg)] transition-all">
+          <div className="max-w-3xl w-full mx-auto px-6 sm:px-12 py-10 flex-1 flex flex-col">
+            {/* Chapter Header Controls */}
+            {selectedChapter && (
+              <div className="mb-8 pb-6 border-b border-[var(--border)]/70 space-y-4">
+                {/* Chapter Number Badge */}
+                <div className="flex items-center justify-between">
+                  <div className="font-mono-meta text-[11px] tracking-[0.2em] text-[var(--text-muted)] uppercase">
+                    CHAPTER {toRomanNumeral(chapters.findIndex((c) => c.id === selectedChapter.id) + 1)}
+                  </div>
+                  <div className="flex items-center gap-3 font-mono-meta text-[10px] text-[var(--text-faint)]">
+                    <span>{selectedChapter.wordCount || 0} WORDS</span>
+                    <span>·</span>
+                    <span>{selectedChapter.readingTimeMin || 1} MIN READ</span>
+                  </div>
+                </div>
 
-              {/* Per-Chapter DOCX Import Button */}
-              <div>
-                <input
-                  ref={chapterDocxInputRef}
-                  type="file"
-                  accept=".docx"
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files?.[0]) {
-                      handleSingleChapterDocx(e.target.files[0]);
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => chapterDocxInputRef.current?.click()}
-                  className="font-mono-meta text-xs tracking-[0.14em] px-3.5 py-2 border border-[var(--border)] hover:border-[var(--text)] transition-colors cursor-pointer"
-                >
-                  IMPORT DOCX INTO THIS CHAPTER ↑
-                </button>
-              </div>
-            </div>
-
-            {/* Chapter Metadata Inputs */}
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-6">
-              <div className="sm:col-span-8 space-y-2">
-                <label className="font-mono-meta text-[11px] text-[var(--text-muted)] block tracking-[0.14em]">
-                  CHAPTER TITLE
-                </label>
+                {/* Chapter Title Input */}
                 <input
                   type="text"
                   value={selectedChapter.title}
                   onChange={(e) => updateChapter(selectedChapter.id, { title: e.target.value })}
-                  className="w-full p-3 bg-[var(--paper-tint)]/50 border border-[var(--border)] font-editorial-title text-2xl sm:text-3xl text-[var(--text)] outline-none focus:border-[var(--text)]"
+                  placeholder="Chapter Title..."
+                  className="w-full font-editorial-title text-3xl sm:text-4xl text-[var(--text)] bg-transparent border-none focus:outline-none placeholder-[var(--text-faint)] font-normal"
                 />
-              </div>
 
-              <div className="sm:col-span-4 space-y-2">
-                <label className="font-mono-meta text-[11px] text-[var(--text-muted)] block tracking-[0.14em]">
-                  ROMAN NUMERAL
-                </label>
+                {/* Chapter Subtitle Input */}
                 <input
                   type="text"
-                  value={selectedChapter.numberRoman}
-                  onChange={(e) => updateChapter(selectedChapter.id, { numberRoman: e.target.value })}
-                  className="w-full p-3 bg-[var(--paper-tint)]/50 border border-[var(--border)] font-mono-meta text-lg text-[var(--text)] outline-none focus:border-[var(--text)]"
-                />
-              </div>
-
-              <div className="sm:col-span-12 space-y-2">
-                <label className="font-mono-meta text-[11px] text-[var(--text-muted)] block tracking-[0.14em]">
-                  CHAPTER SUBTITLE / FOLIO DESCRIBER
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. In which a surveyor revisits thirty-four boxes of tidal measurements..."
                   value={selectedChapter.subtitle || ''}
                   onChange={(e) => updateChapter(selectedChapter.id, { subtitle: e.target.value })}
-                  className="w-full p-2.5 bg-[var(--paper-tint)]/50 border border-[var(--border)] font-editorial-body italic text-base text-[var(--text)] outline-none focus:border-[var(--text)]"
+                  placeholder="Optional chapter subtitle or setting..."
+                  className="w-full font-editorial-body text-base italic text-[var(--text-muted)] bg-transparent border-none focus:outline-none placeholder-[var(--text-faint)]"
+                />
+
+                {/* Epigraph Accordion/Toggle */}
+                <div className="pt-2">
+                  <details className="group">
+                    <summary className="font-mono-meta text-[9.5px] tracking-wider text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer select-none">
+                      {selectedChapter.epigraph ? 'EDIT CHAPTER EPIGRAPH ▼' : '+ ADD CHAPTER EPIGRAPH ▼'}
+                    </summary>
+                    <div className="mt-3 p-3 bg-[var(--paper-tint)]/40 border border-[var(--border)] space-y-2">
+                      <textarea
+                        value={getEpigraphQuote(selectedChapter)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const currentSrc = getEpigraphSource(selectedChapter);
+                          updateChapter(selectedChapter.id, {
+                            epigraph: { quote: val, source: currentSrc }
+                          });
+                        }}
+                        placeholder="Chapter epigraph quote..."
+                        rows={2}
+                        className="w-full font-editorial-body text-sm italic bg-transparent border-none focus:outline-none text-[var(--text)] resize-none"
+                      />
+                      <input
+                        type="text"
+                        value={getEpigraphSource(selectedChapter)}
+                        onChange={(e) => {
+                          const srcVal = e.target.value;
+                          const currentQuote = getEpigraphQuote(selectedChapter);
+                          updateChapter(selectedChapter.id, {
+                            epigraph: { quote: currentQuote, source: srcVal },
+                            epigraphAttribution: srcVal
+                          });
+                        }}
+                        placeholder="— Attribution / Source"
+                        className="w-full font-mono-meta text-[10px] bg-transparent border-none focus:outline-none text-[var(--text-muted)]"
+                      />
+                    </div>
+                  </details>
+                </div>
+              </div>
+            )}
+
+            {/* TipTap Rich Text Prose Editor */}
+            {selectedChapter && (
+              <div className="flex-1 flex flex-col">
+                <TipTapEditor
+                  key={selectedChapter.id}
+                  initialContent={getChapterInitialHtml(selectedChapter)}
+                  onUpdate={handleEditorUpdate}
+                  placeholder="Type your literary prose here. Double line breaks create paragraphs. Use '※' for section dividers..."
                 />
               </div>
-            </div>
+            )}
+          </div>
+        </main>
 
-            {/* Epigraph Input */}
-            <div className="p-6 bg-[var(--paper-tint)]/40 border border-[var(--border)] space-y-4">
-              <span className="font-mono-meta text-[10px] tracking-[0.16em] text-[var(--text-muted)] block">
-                OPTIONAL EPIGRAPH / OPENING QUOTATION
+        {/* ========================================================== */}
+        {/* PANEL 3: RIGHT REAL-TIME BOOK PREVIEW (KINDLE / BOOK VIEW) */}
+        {/* ========================================================== */}
+        {showRightPreview && !isZenMode && (
+          <aside className="w-80 sm:w-96 lg:w-[420px] border-l border-[var(--border)] bg-[var(--paper-tint)]/30 flex flex-col shrink-0 h-[calc(100vh-6.5rem)] overflow-hidden">
+            {/* Preview Toolbar */}
+            <div className="p-3 border-b border-[var(--border)] bg-[var(--bg)] flex items-center justify-between gap-2">
+              <span className="font-mono-meta text-[9.5px] tracking-[0.16em] text-[var(--text-muted)] uppercase">
+                LIVE BOOK PREVIEW
               </span>
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  placeholder="Epigraph quote (e.g. We never notice when the water turns to salt...)"
-                  value={selectedChapter.epigraph?.quote || ''}
-                  onChange={(e) => {
-                    const quote = e.target.value;
-                    const source = selectedChapter.epigraph?.source || '';
-                    updateChapter(selectedChapter.id, {
-                      epigraph: quote ? { quote, source } : undefined
-                    });
-                  }}
-                  className="w-full p-2.5 bg-[var(--bg)] border border-[var(--border)] font-editorial-body italic text-base text-[var(--text)] outline-none focus:border-[var(--text)]"
-                />
-                <input
-                  type="text"
-                  placeholder="Source attribution (e.g. L. M. Rilke, Marginalia)"
-                  value={selectedChapter.epigraph?.source || ''}
-                  onChange={(e) => {
-                    const source = e.target.value;
-                    const quote = selectedChapter.epigraph?.quote || '';
-                    if (quote) {
-                      updateChapter(selectedChapter.id, {
-                        epigraph: { quote, source }
-                      });
-                    }
-                  }}
-                  className="w-full p-2 bg-[var(--bg)] border border-[var(--border)] font-mono-meta text-xs text-[var(--text)] outline-none focus:border-[var(--text)]"
-                />
+
+              {/* Device Viewport Switcher */}
+              <div className="flex items-center border border-[var(--border)] p-0.5" role="group">
+                {[
+                  { id: 'kindle', label: 'KINDLE' },
+                  { id: 'desktop', label: 'BOOK' },
+                  { id: 'mobile', label: 'PHONE' }
+                ].map((dev) => (
+                  <button
+                    key={dev.id}
+                    type="button"
+                    onClick={() => setPreviewDevice(dev.id as DeviceViewport)}
+                    className={`font-mono-meta text-[8.5px] px-2 py-0.5 tracking-wider transition-colors cursor-pointer ${
+                      previewDevice === dev.id
+                        ? 'bg-[var(--text)] text-[var(--bg)] font-semibold'
+                        : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+                    }`}
+                  >
+                    {dev.label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Prose Content Textarea */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="font-mono-meta text-[11px] text-[var(--text-muted)] tracking-[0.14em]">
-                  CHAPTER PROSE PARAGRAPHS
-                </label>
-                <span className="font-mono-meta text-[10px] text-[var(--text-faint)]">
-                  {selectedChapter.wordCount.toLocaleString()} WORDS · {selectedChapter.characterCount ? `${selectedChapter.characterCount.toLocaleString()} CHARS · ` : ''}~{selectedChapter.readingTimeMin} MIN READ (225 WPM)
-                </span>
+            {/* Typesetting Style Switcher */}
+            <div className="px-3 py-2 border-b border-[var(--border)] bg-[var(--paper-tint)]/20 flex items-center justify-between text-xs">
+              <span className="font-mono-meta text-[9px] text-[var(--text-faint)]">TYPESETTING:</span>
+              <div className="flex items-center gap-1">
+                {(['classic', 'minimal', 'academic', 'magazine'] as TypesetStyle[]).map((st) => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setPreviewStyle(st)}
+                    className={`font-mono-meta text-[8.5px] px-2 py-0.5 uppercase tracking-wider border transition-colors cursor-pointer ${
+                      previewStyle === st
+                        ? 'border-[var(--text)] text-[var(--text)] font-semibold bg-[var(--bg)]'
+                        : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text)]'
+                    }`}
+                  >
+                    {st}
+                  </button>
+                ))}
               </div>
-
-              <textarea
-                rows={18}
-                value={selectedChapter.paragraphs.map((p) => p.text).join('\n\n')}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  const splitParagraphs = raw
-                    .split(/\n\s*\n/)
-                    .map((t) => t.trim())
-                    .filter(Boolean)
-                    .map((text) => {
-                      const isBreak = /^(\*\s*\*\s*\*|※\s*※\s*※|—{3,})$/.test(text);
-                      const isDialogue = /^["“'‘]/.test(text);
-                      return { text, isBreak, isDialogue };
-                    });
-
-                  updateChapter(selectedChapter.id, {
-                    paragraphs: splitParagraphs.length > 0 ? splitParagraphs : [{ text: '' }]
-                  });
-                }}
-                className="w-full p-6 bg-[var(--bg)] border border-[var(--border)] font-editorial-body text-lg sm:text-xl text-[var(--text)] leading-relaxed outline-none focus:border-[var(--text)] shadow-inner"
-                placeholder="Write or paste your chapter prose here..."
-              />
             </div>
 
-            <div className="flex items-center justify-between pt-4">
+            {/* Device Frame & Rendered Content */}
+            <div className="flex-1 overflow-y-auto p-4 flex items-center justify-center bg-[var(--paper-tint)]/15">
+              {/* Device Container */}
+              <div
+                className={`transition-all duration-200 bg-[var(--bg)] border shadow-sm w-full overflow-y-auto max-h-full ${
+                  previewDevice === 'kindle'
+                    ? 'border-neutral-800 rounded-sm p-6 ring-4 ring-neutral-200'
+                    : previewDevice === 'mobile'
+                    ? 'max-w-[300px] border-neutral-700 rounded-xl p-5 shadow-md'
+                    : 'border-[var(--border)] p-6'
+                }`}
+              >
+                {/* Kindle Header bar */}
+                {previewDevice === 'kindle' && (
+                  <div className="flex items-center justify-between border-b border-neutral-300 pb-2 mb-4 font-mono text-[8px] text-neutral-500 tracking-wider">
+                    <span>{currentWork.title.toUpperCase()}</span>
+                    <span>CH. {toRomanNumeral(chapters.findIndex((c) => c.id === selectedChapter?.id) + 1)}</span>
+                    <span>100%</span>
+                  </div>
+                )}
+
+                {/* Live Typeset Content Rendering */}
+                {selectedChapter && (
+                  <article
+                    className={`preview-typeset-${previewStyle} transition-all duration-150 text-[var(--text)]`}
+                  >
+                    {/* Chapter Header */}
+                    <div className="text-center mb-6 space-y-1">
+                      <div className="font-mono-meta text-[9px] tracking-[0.2em] text-[var(--text-muted)] uppercase">
+                        CHAPTER {toRomanNumeral(chapters.findIndex((c) => c.id === selectedChapter.id) + 1)}
+                      </div>
+                      <h2 className="font-editorial-title text-2xl tracking-tight text-[var(--text)]">
+                        {selectedChapter.title}
+                      </h2>
+                      {selectedChapter.subtitle && (
+                        <p className="font-editorial-body text-xs italic text-[var(--text-muted)]">
+                          {selectedChapter.subtitle}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Epigraph */}
+                    {getEpigraphQuote(selectedChapter) && (
+                      <div className="my-5 px-4 py-2 border-l-2 border-[var(--border)] italic font-editorial-body text-xs text-[var(--text-muted)] text-center">
+                        <p>“{getEpigraphQuote(selectedChapter)}”</p>
+                        {getEpigraphSource(selectedChapter) && (
+                          <p className="font-mono-meta text-[8.5px] mt-1 text-[var(--text-faint)]">
+                            — {getEpigraphSource(selectedChapter)}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Prose paragraphs */}
+                    <div className="space-y-3 font-editorial-body text-xs sm:text-[13px] leading-relaxed text-[var(--text)]">
+                      {selectedChapter.paragraphs && selectedChapter.paragraphs.length > 0 ? (
+                        selectedChapter.paragraphs.slice(0, 8).map((p, pIdx) => {
+                          if (p.isAsterism) {
+                            return (
+                              <div key={p.id || pIdx} className="text-center text-xs tracking-widest my-3 opacity-60">
+                                ※
+                              </div>
+                            );
+                          }
+                          // Apply Drop Cap to first paragraph in Classic & Magazine styles
+                          const isFirst = pIdx === 0;
+                          if (isFirst && (previewStyle === 'classic' || previewStyle === 'magazine')) {
+                            const firstChar = p.text.charAt(0);
+                            const restText = p.text.slice(1);
+                            return (
+                              <p key={p.id || pIdx} className="relative">
+                                <span className="float-left text-3xl font-editorial-title leading-none pr-1.5 pt-0.5 text-[var(--text)]">
+                                  {firstChar}
+                                </span>
+                                {restText}
+                              </p>
+                            );
+                          }
+                          return (
+                            <p
+                              key={p.id || pIdx}
+                              className={previewStyle === 'classic' ? 'indent-4 mt-0' : ''}
+                            >
+                              {p.text}
+                            </p>
+                          );
+                        })
+                      ) : (
+                        <p className="italic text-[var(--text-faint)] text-center">Chapter text is empty...</p>
+                      )}
+
+                      {selectedChapter.paragraphs && selectedChapter.paragraphs.length > 8 && (
+                        <div className="text-center py-2 text-[var(--text-faint)] font-mono-meta text-[8.5px]">
+                          + {selectedChapter.paragraphs.length - 8} more paragraphs...
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Kindle Footer */}
+                    {previewDevice === 'kindle' && (
+                      <div className="flex items-center justify-between border-t border-neutral-300 pt-2 mt-6 font-mono text-[8px] text-neutral-400">
+                        <span>Page 1 of {Math.ceil((selectedChapter.wordCount || 100) / 250)}</span>
+                        <span>{selectedChapter.readingTimeMin || 1}m left</span>
+                      </div>
+                    )}
+                  </article>
+                )}
+              </div>
+            </div>
+
+            {/* Bottom Export Bar */}
+            <div className="p-3 border-t border-[var(--border)] bg-[var(--bg)] flex items-center justify-between gap-2">
               <button
                 type="button"
-                onClick={() => setActiveTab('chapters')}
-                className="font-mono-meta text-xs tracking-[0.14em] px-4 py-2 border border-[var(--border)] hover:border-[var(--text)] transition-colors cursor-pointer"
+                onClick={handleExportEpub}
+                className="font-mono-meta text-[9px] px-2.5 py-1.5 bg-[var(--text)] text-[var(--bg)] hover:opacity-85 transition-opacity cursor-pointer"
               >
-                ← BACK TO CHAPTERS LIST
+                EPUB 3 ↓
               </button>
-
-              <Link
-                to={`/novel/${selectedChapter.slug}`}
-                className="font-mono-meta text-xs tracking-[0.14em] px-5 py-2.5 bg-[var(--text)] text-[var(--bg)] hover:opacity-85 transition-opacity"
+              <button
+                type="button"
+                onClick={handleExportMarkdown}
+                className="font-mono-meta text-[9px] px-2.5 py-1.5 border border-[var(--border)] hover:border-[var(--text)] transition-colors cursor-pointer"
               >
-                VIEW CHAPTER IN BOOK MODE →
-              </Link>
+                MARKDOWN ↓
+              </button>
+              <button
+                type="button"
+                onClick={handleExportPlainText}
+                className="font-mono-meta text-[9px] px-2.5 py-1.5 border border-[var(--border)] hover:border-[var(--text)] transition-colors cursor-pointer"
+              >
+                TXT ↓
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="font-mono-meta text-[9px] px-2.5 py-1.5 border border-[var(--border)] hover:border-[var(--text)] transition-colors cursor-pointer"
+              >
+                PDF ⎙
+              </button>
             </div>
-          </div>
-        )}
-
-        {/* TAB 3: NOVEL FOLIO DETAILS */}
-        {activeTab === 'metadata' && (
-          <div className="space-y-8 max-w-2xl">
-            <div className="pb-4 border-b border-[var(--border)]">
-              <h3 className="font-editorial-title text-3xl text-[var(--text)]">
-                Novel Folio & Colophon Details
-              </h3>
-              <p className="font-editorial-body text-sm text-[var(--text-muted)]">
-                These details define the title folio, cover artwork, and digital publishing colophon.
-              </p>
-            </div>
-
-            <div className="space-y-6">
-              <div className="space-y-1.5">
-                <label className="font-mono-meta text-xs tracking-[0.14em] text-[var(--text-muted)] block">
-                  NOVEL TITLE
-                </label>
-                <input
-                  type="text"
-                  value={novelMeta.title}
-                  onChange={(e) => updateNovelField('title', e.target.value)}
-                  className="w-full p-3 bg-[var(--paper-tint)]/40 border border-[var(--border)] font-editorial-title text-3xl text-[var(--text)] outline-none focus:border-[var(--text)]"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="space-y-1.5">
-                  <label className="font-mono-meta text-xs tracking-[0.14em] text-[var(--text-muted)] block">
-                    AUTHOR NAME
-                  </label>
-                  <input
-                    type="text"
-                    value={novelMeta.author}
-                    onChange={(e) => updateNovelField('author', e.target.value)}
-                    className="w-full p-2.5 bg-[var(--paper-tint)]/40 border border-[var(--border)] font-editorial-body text-lg text-[var(--text)] outline-none focus:border-[var(--text)]"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="font-mono-meta text-xs tracking-[0.14em] text-[var(--text-muted)] block">
-                    PUBLICATION YEAR
-                  </label>
-                  <input
-                    type="text"
-                    value={novelMeta.year}
-                    onChange={(e) => updateNovelField('year', e.target.value)}
-                    className="w-full p-2.5 bg-[var(--paper-tint)]/40 border border-[var(--border)] font-mono-meta text-sm text-[var(--text)] outline-none focus:border-[var(--text)]"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="font-mono-meta text-xs tracking-[0.14em] text-[var(--text-muted)] block">
-                  SYNOPSIS / ARCHIVAL SUMMARY
-                </label>
-                <textarea
-                  rows={4}
-                  value={novelMeta.synopsis}
-                  onChange={(e) => updateNovelField('synopsis', e.target.value)}
-                  className="w-full p-3 bg-[var(--paper-tint)]/40 border border-[var(--border)] font-editorial-body text-base text-[var(--text)] leading-relaxed outline-none focus:border-[var(--text)]"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="font-mono-meta text-xs tracking-[0.14em] text-[var(--text-muted)] block">
-                  SUBTITLE / EDITION TITLE
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. A Serialized Novel in Eight Folios"
-                  value={novelMeta.subtitle}
-                  onChange={(e) => updateNovelField('subtitle', e.target.value)}
-                  className="w-full p-2.5 bg-[var(--paper-tint)]/40 border border-[var(--border)] font-editorial-body italic text-base text-[var(--text)] outline-none focus:border-[var(--text)]"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="font-mono-meta text-xs tracking-[0.14em] text-[var(--text-muted)] block">
-                  HERO OPENING EXCERPT
-                </label>
-                <textarea
-                  rows={2}
-                  value={novelMeta.heroExcerpt}
-                  onChange={(e) => updateNovelField('heroExcerpt', e.target.value)}
-                  className="w-full p-3 bg-[var(--paper-tint)]/40 border border-[var(--border)] font-editorial-body italic text-base text-[var(--text)] leading-relaxed outline-none focus:border-[var(--text)]"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="font-mono-meta text-xs tracking-[0.14em] text-[var(--text-muted)] block">
-                  COVER IMAGE / ARTWORK URL (OPTIONAL)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. https://... or leave empty for 3D typographic debossed folio"
-                  value={novelMeta.coverImage || ''}
-                  onChange={(e) => updateNovelField('coverImage', e.target.value)}
-                  className="w-full p-2.5 bg-[var(--paper-tint)]/40 border border-[var(--border)] font-mono-meta text-xs text-[var(--text)] outline-none focus:border-[var(--text)]"
-                />
-              </div>
-            </div>
-          </div>
+          </aside>
         )}
       </div>
+
+      {/* MODALS */}
+      <CreateWorkModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onCreated={(workId) => {
+          setActiveWorkId(workId);
+          setIsCreateModalOpen(false);
+        }}
+      />
+
+      {pendingParsedDocx && (
+        <ImportReviewModal
+          isOpen={isImportModalOpen}
+          detectedTitle={pendingParsedDocx.detectedNovelTitle || 'Imported Manuscript'}
+          detectedAuthor={pendingParsedDocx.detectedAuthor || currentWork.author}
+          chapters={pendingParsedDocx.chapters}
+          rawTextPreview={pendingParsedDocx.rawTextPreview}
+          onConfirm={(finalTitle, finalAuthor, finalChapters) =>
+            handleConfirmImport(finalChapters, finalTitle, finalAuthor)
+          }
+          onCancel={() => {
+            setIsImportModalOpen(false);
+            setPendingParsedDocx(null);
+          }}
+        />
+      )}
     </div>
   );
 };
