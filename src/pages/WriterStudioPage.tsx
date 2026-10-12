@@ -366,12 +366,12 @@ export const WriterStudioPage: React.FC = () => {
                     >
                       {/* Left: Drag Grip & Number & Title */}
                       <div className="flex items-center gap-4 sm:gap-6 min-w-0">
-                        {/* Drag Handle */}
+                        {/* Drag Handle ⠿ */}
                         <div
                           className="cursor-grab active:cursor-grabbing p-1.5 text-[var(--text-faint)] group-hover:text-[var(--text)] transition-colors select-none"
-                          title="Drag to reorder"
+                          title="Drag handle: click and hold to reorder"
                         >
-                          <span className="font-mono text-sm leading-none block">⋮⋮</span>
+                          <span className="font-mono text-base leading-none block">⠿</span>
                         </div>
 
                         {/* Reorder Up/Down arrows for mobile/touch */}
@@ -381,7 +381,7 @@ export const WriterStudioPage: React.FC = () => {
                             disabled={index === 0}
                             onClick={() => reorderChapters(index, index - 1)}
                             className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text)] disabled:opacity-20 cursor-pointer"
-                            title="Move up"
+                            title="Move chapter up"
                           >
                             ▲
                           </button>
@@ -390,22 +390,26 @@ export const WriterStudioPage: React.FC = () => {
                             disabled={index === chapters.length - 1}
                             onClick={() => reorderChapters(index, index + 1)}
                             className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text)] disabled:opacity-20 cursor-pointer"
-                            title="Move down"
+                            title="Move chapter down"
                           >
                             ▼
                           </button>
                         </div>
 
-                        <span className="font-mono-meta text-xs text-[var(--text-muted)] w-8">
+                        {/* Index display badge */}
+                        <span className="font-mono-meta text-xs text-[var(--text-faint)] w-7">
                           {ch.numberDisplay}
                         </span>
 
                         <div className="min-w-0">
                           <h4 className="font-editorial-title text-2xl sm:text-3xl text-[var(--text)] truncate">
-                            {ch.title}
+                            <span className="font-mono-meta text-sm text-[var(--text-muted)] mr-3 font-normal">
+                              {ch.numberRoman}
+                            </span>
+                            <span>{ch.title}</span>
                           </h4>
-                          <span className="font-mono-meta text-[10px] text-[var(--text-faint)]">
-                            CHAPTER {ch.numberRoman} · {ch.wordCount.toLocaleString()} WORDS · ~{ch.readingTimeMin} MIN READ
+                          <span className="font-mono-meta text-[10px] text-[var(--text-faint)] block mt-0.5">
+                            {ch.subtitle ? `${ch.subtitle} · ` : ''}{ch.wordCount.toLocaleString()} WORDS · ~{ch.readingTimeMin} MIN READ
                           </span>
                         </div>
                       </div>
@@ -522,12 +526,25 @@ export const WriterStudioPage: React.FC = () => {
                   className="w-full p-3 bg-[var(--paper-tint)]/50 border border-[var(--border)] font-mono-meta text-lg text-[var(--text)] outline-none focus:border-[var(--text)]"
                 />
               </div>
+
+              <div className="sm:col-span-12 space-y-2">
+                <label className="font-mono-meta text-[11px] text-[var(--text-muted)] block tracking-[0.14em]">
+                  CHAPTER SUBTITLE / FOLIO DESCRIBER
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. In which a surveyor revisits thirty-four boxes of tidal measurements..."
+                  value={selectedChapter.subtitle || ''}
+                  onChange={(e) => updateChapter(selectedChapter.id, { subtitle: e.target.value })}
+                  className="w-full p-2.5 bg-[var(--paper-tint)]/50 border border-[var(--border)] font-editorial-body italic text-base text-[var(--text)] outline-none focus:border-[var(--text)]"
+                />
+              </div>
             </div>
 
             {/* Epigraph Input */}
             <div className="p-6 bg-[var(--paper-tint)]/40 border border-[var(--border)] space-y-4">
               <span className="font-mono-meta text-[10px] tracking-[0.16em] text-[var(--text-muted)] block">
-                OPTIONAL EPIGRAGH / OPENING QUOTATION
+                OPTIONAL EPIGRAPH / OPENING QUOTATION
               </span>
               <div className="space-y-3">
                 <input
@@ -568,7 +585,7 @@ export const WriterStudioPage: React.FC = () => {
                   CHAPTER PROSE PARAGRAPHS
                 </label>
                 <span className="font-mono-meta text-[10px] text-[var(--text-faint)]">
-                  {selectedChapter.wordCount.toLocaleString()} WORDS · SEPARATE PARAGRAPHS WITH DOUBLE NEWLINE
+                  {selectedChapter.wordCount.toLocaleString()} WORDS · {selectedChapter.characterCount ? `${selectedChapter.characterCount.toLocaleString()} CHARS · ` : ''}~{selectedChapter.readingTimeMin} MIN READ (225 WPM)
                 </span>
               </div>
 
@@ -680,6 +697,19 @@ export const WriterStudioPage: React.FC = () => {
 
               <div className="space-y-1.5">
                 <label className="font-mono-meta text-xs tracking-[0.14em] text-[var(--text-muted)] block">
+                  SUBTITLE / EDITION TITLE
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. A Serialized Novel in Eight Folios"
+                  value={novelMeta.subtitle}
+                  onChange={(e) => updateNovelField('subtitle', e.target.value)}
+                  className="w-full p-2.5 bg-[var(--paper-tint)]/40 border border-[var(--border)] font-editorial-body italic text-base text-[var(--text)] outline-none focus:border-[var(--text)]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-mono-meta text-xs tracking-[0.14em] text-[var(--text-muted)] block">
                   HERO OPENING EXCERPT
                 </label>
                 <textarea
@@ -687,6 +717,19 @@ export const WriterStudioPage: React.FC = () => {
                   value={novelMeta.heroExcerpt}
                   onChange={(e) => updateNovelField('heroExcerpt', e.target.value)}
                   className="w-full p-3 bg-[var(--paper-tint)]/40 border border-[var(--border)] font-editorial-body italic text-base text-[var(--text)] leading-relaxed outline-none focus:border-[var(--text)]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-mono-meta text-xs tracking-[0.14em] text-[var(--text-muted)] block">
+                  COVER IMAGE / ARTWORK URL (OPTIONAL)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. https://... or leave empty for 3D typographic debossed folio"
+                  value={novelMeta.coverImage || ''}
+                  onChange={(e) => updateNovelField('coverImage', e.target.value)}
+                  className="w-full p-2.5 bg-[var(--paper-tint)]/40 border border-[var(--border)] font-mono-meta text-xs text-[var(--text)] outline-none focus:border-[var(--text)]"
                 />
               </div>
             </div>

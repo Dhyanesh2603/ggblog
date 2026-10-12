@@ -74,10 +74,19 @@ export const BookCoverArt: React.FC = () => {
             <span>※ {novelMeta.year}</span>
           </div>
 
+          {/* Optional Cover Image Texture / Overlay */}
+          {novelMeta.coverImage && (
+            <img
+              src={novelMeta.coverImage}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover opacity-15 mix-blend-multiply pointer-events-none"
+            />
+          )}
+
           {/* Cover Typographic Heart */}
           <div className="relative z-10 my-auto py-8 text-center space-y-4">
             <span className="font-mono-meta text-[9.5px] tracking-[0.24em] text-[var(--text-faint)] block uppercase">
-              A Serialized Novel
+              {novelMeta.subtitle || 'A Serialized Novel'}
             </span>
 
             <h2 className="font-editorial-title text-4xl sm:text-5xl text-[var(--text)] tracking-tight leading-[0.95]">

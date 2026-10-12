@@ -10,6 +10,7 @@ export interface NovelMeta {
   heroExcerpt: string;
   coverQuote: string;
   synopsis: string;
+  coverImage?: string;
 }
 
 export interface AuthorNote {
@@ -32,9 +33,11 @@ export interface Chapter {
   numberRoman: string; // "I", "II", "III", etc.
   numberDisplay: string; // "01", "02", etc.
   title: string;
+  subtitle?: string;
   slug: string;
   readingTimeMin: number;
   wordCount: number;
+  characterCount?: number;
   date: string;
   epigraph?: {
     quote: string;

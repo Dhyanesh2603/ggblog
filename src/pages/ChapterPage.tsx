@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useNovel } from '../context/NovelContext';
 import { useReading, directWriteProgress } from '../context/ReadingContext';
+import { generateEpubBlob, downloadBlob } from '../utils/epubGenerator';
 import { ScrollProgress } from '../components/ScrollProgress';
 import { MarginalNote } from '../components/MarginalNote';
 
@@ -14,14 +15,16 @@ export const ChapterPage: React.FC = () => {
     progressMap,
     fontSize,
     setFontSize,
-    setIsTocOpen
+    setIsTocOpen,
+    isZenMode,
+    setIsZenMode
   } = useReading();
 
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [resumedInfo, setResumedInfo] = useState<{ percentage: number } | null>(null);
+  const [isExportingEpub, setIsExportingEpub] = useState(false);
 
-  // Zen Mode States
-  const [isZenMode, setIsZenMode] = useState(false);
+  // Zen Mode controls overlay state
   const [showZenControls, setShowZenControls] = useState(false);
 
   // Flags to prevent initial mounting from triggering spurious 0% writes
@@ -63,6 +66,18 @@ export const ChapterPage: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isZenMode]);
+
+  const handleExportEpub = async () => {
+    try {
+      setIsExportingEpub(true);
+      const blob = await generateEpubBlob(novelMeta, chapters);
+      downloadBlob(blob, `${novelMeta.title.replace(/\s+/g, '_')}.epub`);
+    } catch (e) {
+      console.error('Failed to export EPUB', e);
+    } finally {
+      setIsExportingEpub(false);
+    }
+  };
 
   // Zen mode mouse movement detection to reveal exit pill
   useEffect(() => {
@@ -238,6 +253,27 @@ export const ChapterPage: React.FC = () => {
 
             {/* Right: Typography size controls & Mode */}
             <div className="flex items-center gap-4 sm:gap-6">
+              {/* EPUB Export Button */}
+              <button
+                type="button"
+                onClick={handleExportEpub}
+                disabled={isExportingEpub}
+                className="hover:text-[var(--text)] transition-colors cursor-pointer hidden md:inline text-[10.5px] disabled:opacity-50"
+                title="Download complete EPUB3 book"
+              >
+                {isExportingEpub ? 'EXPORTING...' : 'EPUB ↓'}
+              </button>
+
+              {/* Print / PDF Button */}
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="hover:text-[var(--text)] transition-colors cursor-pointer hidden sm:inline text-[10.5px]"
+                title="Print or Save as Book PDF (Ctrl+P)"
+              >
+                PRINT ⎙
+              </button>
+
               {/* Zen Mode Button */}
               <button
                 type="button"
@@ -350,6 +386,11 @@ export const ChapterPage: React.FC = () => {
               <h1 className="font-editorial-title text-3xl sm:text-5xl md:text-6xl lg:text-7xl text-[var(--text)] tracking-tight leading-[1.05]">
                 {currentChapter.title}
               </h1>
+              {currentChapter.subtitle && (
+                <p className="font-editorial-body italic text-lg sm:text-xl text-[var(--text-muted)] mt-2">
+                  {currentChapter.subtitle}
+                </p>
+              )}
             </div>
 
             {/* Epigraph */}

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { NovelProvider } from './context/NovelContext';
-import { ReadingProvider } from './context/ReadingContext';
+import { ReadingProvider, useReading } from './context/ReadingContext';
 import { Header } from './components/Header';
 import { MobileMenu } from './components/MobileMenu';
 import { TableOfContentsDrawer } from './components/TableOfContentsDrawer';
@@ -63,21 +63,29 @@ function AnimatedRoutes() {
   );
 }
 
+function AppLayout() {
+  const { isZenMode } = useReading();
+
+  return (
+    <div className="min-h-screen flex flex-col justify-between bg-[var(--bg)] text-[var(--text)] transition-colors duration-200">
+      <div>
+        {!isZenMode && <Header />}
+        {!isZenMode && <MobileMenu />}
+        <TableOfContentsDrawer />
+        <AnimatedRoutes />
+      </div>
+      {!isZenMode && <Footer />}
+    </div>
+  );
+}
+
 export function App() {
   return (
     <BrowserRouter>
       <NovelProvider>
         <ReadingProvider>
           <ScrollRestoration />
-          <div className="min-h-screen flex flex-col justify-between bg-[var(--bg)] text-[var(--text)] transition-colors duration-200">
-            <div>
-              <Header />
-              <MobileMenu />
-              <TableOfContentsDrawer />
-              <AnimatedRoutes />
-            </div>
-            <Footer />
-          </div>
+          <AppLayout />
         </ReadingProvider>
       </NovelProvider>
     </BrowserRouter>

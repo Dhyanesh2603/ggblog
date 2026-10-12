@@ -29,6 +29,29 @@ export function toRomanNumeral(num: number): string {
   return result || 'I';
 }
 
+/**
+ * Normalizes literary typography:
+ * - Dialogue & em dashes: double/triple hyphens to true em-dash (—)
+ * - Smart curly double quotes (“ ”)
+ * - Smart curly single quotes and apostrophes (‘ ’)
+ * - Cleans double spaces
+ */
+export function normalizeLiteraryTypography(text: string): string {
+  if (!text) return '';
+  let s = text;
+  // Convert hyphens to em dashes
+  s = s.replace(/---/g, '—').replace(/--/g, '—');
+  // Collapse duplicate horizontal spaces
+  s = s.replace(/[ \t]{2,}/g, ' ');
+  // Smart double quotes: opening vs closing
+  s = s.replace(/(^|[\s(\[{<])"/g, '$1“');
+  s = s.replace(/"/g, '”');
+  // Smart single quotes & apostrophes
+  s = s.replace(/(^|[\s(\[{<])'/g, '$1‘');
+  s = s.replace(/'/g, '’');
+  return s.trim();
+}
+
 export interface ParseDocxResult {
   chapters: Chapter[];
   detectedNovelTitle?: string;
@@ -37,12 +60,13 @@ export interface ParseDocxResult {
 }
 
 /**
- * Rule-based DOCX Content Extractor:
- * 1. Converts DOCX to clean HTML/text via Mammoth.
- * 2. Scans for Chapter patterns (H1/H2, "Chapter I", "Chapter 1: The Beginning", etc.).
- * 3. Extracts Epigraphs (leading quotes with attribution).
- * 4. Normalizes dialogue, narrative paragraphs, and asterism breaks (* * *).
- * 5. Calculates accurate word counts and reading estimates.
+ * Professional Rule-Based DOCX Manuscript Parser:
+ * 1. Heading Detection: H1 & H2 automatically trigger new chapters.
+ * 2. Text Marker Detection: Chapter 1, Chapter I, CHAPTER ONE, Folio I, Part I, Section 1.
+ * 3. Blockquote Detection: extracts blockquotes or quotes with attribution as Chapter Epigraph.
+ * 4. Section Break Detection: * * *, ***, ---, ※ converted to editorial asterisms.
+ * 5. Typography Normalization: curly quotes, em-dashes, apostrophes, double spaces.
+ * 6. Metadata Extraction: word count, character count, reading time (225 words/min).
  */
 export async function parseDocxFile(file: File): Promise<ParseDocxResult> {
   const arrayBuffer = await file.arrayBuffer();
@@ -51,7 +75,7 @@ export async function parseDocxFile(file: File): Promise<ParseDocxResult> {
   const result = await mammoth.convertToHtml({ arrayBuffer });
   const rawHtml = result.value || '';
 
-  // Also get raw text for preview
+  // Extract raw text for preview
   const rawTextResult = await mammoth.extractRawText({ arrayBuffer });
   const rawText = rawTextResult.value || '';
 
@@ -63,7 +87,6 @@ export function parseHtmlContentToChapters(
   rawText: string,
   fallbackFilename = 'manuscript.docx'
 ): ParseDocxResult {
-  // Create a temporary DOM parser
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
   const elements = Array.from(doc.body.children);
@@ -71,55 +94,65 @@ export function parseHtmlContentToChapters(
   let detectedNovelTitle: string | undefined;
   let detectedAuthor: string | undefined;
 
-  // Chapter separation buckets
   interface RawChapterBucket {
     title: string;
+    subtitle?: string;
     elements: Element[];
   }
 
   const chapterBuckets: RawChapterBucket[] = [];
   let currentBucket: RawChapterBucket | null = null;
 
-  // Chapter header detector regex
-  const chapterRegex = /^(?:Chapter|CHAPTER|Folio|FOLIO|Part|PART|Book|BOOK)\s+([IVXLCDM\d]+)(?:\s*[:—–-]\s*|\s*[\n\r]\s*|\s+)(.*)$/i;
-  const simpleChapterRegex = /^(?:Chapter|CHAPTER)\s+([IVXLCDM\d]+)$/i;
+  // Chapter markers regex: Chapter 1, Chapter I, CHAPTER ONE, Folio I, Part I, Section 1
+  const chapterMarkerRegex = /^(?:Chapter|CHAPTER|Folio|FOLIO|Part|PART|Section|SECTION|Book|BOOK)\s+([IVXLCDM\d]+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)(?:\s*[:—–-]\s*|\s*[\n\r]\s*|\s+|$)(.*)$/i;
+  const standaloneChapterRegex = /^(?:Chapter|CHAPTER|Folio|FOLIO|Part|PART|Section|SECTION)\s+([IVXLCDM\d]+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)$/i;
+
+  // Section break detector: * * *, ***, ---, ※, - - -
+  const isSectionBreak = (str: string) =>
+    /^(\*\s*\*\s*\*|\*{3,}|—{2,}|-{3,}|※\s*※\s*※|※|- - -|\*\s*\*\s*\*\s*\*)$/.test(str.trim());
 
   elements.forEach((el, index) => {
-    const text = el.textContent?.trim() || '';
-    if (!text) return;
+    const rawContent = el.textContent?.trim() || '';
+    if (!rawContent) return;
 
-    // Check if this element marks a new chapter
-    const isHeadingTag = ['H1', 'H2', 'H3'].includes(el.tagName);
-    const matchesChapter = chapterRegex.exec(text) || simpleChapterRegex.exec(text);
+    // Check heading tags (H1 and H2 per specification)
+    const isHeadingTag = ['H1', 'H2'].includes(el.tagName);
+    const matchesMarker = chapterMarkerRegex.exec(rawContent) || standaloneChapterRegex.exec(rawContent);
 
-    // If it's the very first element and has no chapter label, it might be the Novel Title
-    if (index === 0 && isHeadingTag && !matchesChapter && !detectedNovelTitle) {
-      detectedNovelTitle = text;
+    // If it's the very first element and has no chapter label, it is likely the Book Title
+    if (index === 0 && isHeadingTag && !matchesMarker && !detectedNovelTitle) {
+      detectedNovelTitle = normalizeLiteraryTypography(rawContent);
       return;
     }
 
     // Check for author byline e.g. "by Julian Thorne"
-    if (index <= 2 && /^by\s+/i.test(text) && !detectedAuthor) {
-      detectedAuthor = text.replace(/^by\s+/i, '').trim();
+    if (index <= 2 && /^by\s+/i.test(rawContent) && !detectedAuthor) {
+      detectedAuthor = normalizeLiteraryTypography(rawContent.replace(/^by\s+/i, ''));
       return;
     }
 
-    if (isHeadingTag || matchesChapter) {
-      let title = text;
-      if (matchesChapter) {
-        // e.g., "Chapter 1: The Beginning" -> title = "The Beginning"
-        const remainder = matchesChapter[2]?.trim();
-        title = remainder || text;
+    if (isHeadingTag || matchesMarker) {
+      let title = rawContent;
+      let subtitle: string | undefined;
+
+      if (matchesMarker) {
+        const remainder = matchesMarker[2]?.trim();
+        if (remainder) {
+          title = remainder;
+        } else {
+          title = rawContent;
+        }
       }
 
       currentBucket = {
-        title,
+        title: normalizeLiteraryTypography(title),
+        subtitle,
         elements: []
       };
       chapterBuckets.push(currentBucket);
     } else {
       if (!currentBucket) {
-        // Default first chapter if content starts before any explicit heading
+        // Default first chapter if content begins before an explicit heading
         currentBucket = {
           title: detectedNovelTitle || fallbackFilename.replace(/\.[^/.]+$/, ''),
           elements: []
@@ -130,7 +163,7 @@ export function parseHtmlContentToChapters(
     }
   });
 
-  // If no buckets formed (empty file), return empty
+  // If no buckets formed (empty file), return single fallback bucket
   if (chapterBuckets.length === 0) {
     chapterBuckets.push({
       title: 'Chapter I',
@@ -138,7 +171,7 @@ export function parseHtmlContentToChapters(
     });
   }
 
-  // Format into final Chapter structures
+  // Format into final Chapter structures with full editorial rules
   const chapters: Chapter[] = chapterBuckets.map((bucket, idx) => {
     const chapterIndex = idx + 1;
     const numberRoman = toRomanNumeral(chapterIndex);
@@ -148,7 +181,6 @@ export function parseHtmlContentToChapters(
     let epigraph: { quote: string; source: string } | undefined;
     const paragraphs: ChapterParagraph[] = [];
 
-    // Parse elements in this chapter
     const pElements = bucket.elements;
     let checkedEpigraph = false;
 
@@ -156,9 +188,8 @@ export function parseHtmlContentToChapters(
       const text = el.textContent?.trim() || '';
       if (!text) return;
 
-      // Check for epigraph in first 2 elements
+      // 1. Blockquote Detection: Tag or Leading Quote with Attribution
       if (!checkedEpigraph && elIdx < 3) {
-        // Is it a blockquote or starts with quote and has an attribution?
         const isBlockquote = el.tagName === 'BLOCKQUOTE';
         const hasQuoteFormat = /^["“].*["”]/s.test(text);
         const attributionMatch = text.match(/(?:—|--|-)\s*([^—\n]+)$/);
@@ -170,16 +201,19 @@ export function parseHtmlContentToChapters(
             source = attributionMatch[1].trim();
             quote = text.replace(/(?:—|--|-)\s*[^—\n]+$/, '').trim();
           }
-          // Remove surrounding quotes for clean storage
+          // Clean quotes
           quote = quote.replace(/^["“]|["”]$/g, '').trim();
-          epigraph = { quote, source };
+          epigraph = {
+            quote: normalizeLiteraryTypography(quote),
+            source: normalizeLiteraryTypography(source)
+          };
           checkedEpigraph = true;
           return;
         }
       }
 
-      // Check for section break asterisms (* * *, ---, ※)
-      if (/^(\*\s*\*\s*\*|—{3,}|※\s*※\s*※|#{3,})$/.test(text)) {
+      // 2. Section Break Detection (* * *, ***, ---, ※)
+      if (isSectionBreak(text)) {
         paragraphs.push({
           text: '※   ※   ※',
           isBreak: true
@@ -187,30 +221,37 @@ export function parseHtmlContentToChapters(
         return;
       }
 
-      // Check for dialogue
-      const isDialogue = /^["“'‘]/.test(text);
+      // 3. Narrative & Dialogue Paragraphs with Typography Normalization
+      const normalized = normalizeLiteraryTypography(text);
+      const isDialogue = /^["“'‘]/.test(normalized);
 
       paragraphs.push({
-        text,
+        text: normalized,
         isDialogue
       });
     });
 
-    // Compute word count and reading time
+    // 4. Metadata Extraction: Word count, Character count, Reading time (225 wpm)
     const totalWords = paragraphs.reduce((acc, p) => {
       return acc + (p.isBreak ? 0 : p.text.split(/\s+/).filter(Boolean).length);
     }, 0);
 
-    const readingTimeMin = Math.max(1, Math.round(totalWords / 200));
+    const totalChars = paragraphs.reduce((acc, p) => {
+      return acc + (p.isBreak ? 0 : p.text.length);
+    }, 0);
+
+    const readingTimeMin = Math.max(1, Math.round(totalWords / 225));
 
     return {
       id: chapterIndex,
       numberRoman,
       numberDisplay,
       title: bucket.title || `Chapter ${numberRoman}`,
+      subtitle: bucket.subtitle,
       slug,
       readingTimeMin,
       wordCount: totalWords,
+      characterCount: totalChars,
       date: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase(),
       epigraph,
       paragraphs,

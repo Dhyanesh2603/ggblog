@@ -72,6 +72,8 @@ interface ReadingContextType {
   setIsTocOpen: (open: boolean) => void;
   isMobileMenuOpen: boolean;
   setIsMobileMenuOpen: (open: boolean) => void;
+  isZenMode: boolean;
+  setIsZenMode: React.Dispatch<React.SetStateAction<boolean>>;
   activeNoteId: string | null;
   setActiveNoteId: (id: string | null) => void;
   progressMap: Record<string, ReadingProgressRecord>;
@@ -106,9 +108,10 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return 'default';
   });
 
-  // TOC drawer & mobile menu & marginalia notes
+  // TOC drawer & mobile menu & marginalia notes & Zen reading mode
   const [isTocOpen, setIsTocOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isZenMode, setIsZenMode] = useState(false);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
 
   // Reading progress storage - parsed safely from localStorage
@@ -243,6 +246,8 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setIsTocOpen,
         isMobileMenuOpen,
         setIsMobileMenuOpen,
+        isZenMode,
+        setIsZenMode,
         activeNoteId,
         setActiveNoteId,
         progressMap,
