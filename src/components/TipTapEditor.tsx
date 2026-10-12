@@ -284,8 +284,8 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         </div>
       </div>
 
-      {/* Editor Prose Canvas */}
-      <div className="p-4 sm:p-8 bg-[var(--paper-tint)]/30 border border-[var(--border)] min-h-[460px] cursor-text">
+      {/* Editor Prose Canvas - Seamless Paper */}
+      <div className="py-6 min-h-[460px] cursor-text">
         <EditorContent editor={editor} />
       </div>
 
