@@ -3,6 +3,11 @@ import { Link } from 'react-router-dom';
 import { useNovel } from '../context/NovelContext';
 import { TipTapEditor } from '../components/TipTapEditor';
 import { ImportReviewModal } from '../components/ImportReviewModal';
+import { StudioAuthModal } from '../components/StudioAuthModal';
+import { MasterKeysModal } from '../components/MasterKeysModal';
+import { ChapterSnapshotsDrawer } from '../components/ChapterSnapshotsDrawer';
+import { ScratchpadDrawer } from '../components/ScratchpadDrawer';
+import { DatabaseModal } from '../components/DatabaseModal';
 import { parseDocxFile, type ParseDocxResult, toRomanNumeral } from '../utils/docxParser';
 import { generateEpubBlob, downloadBlob } from '../utils/epubGenerator';
 import type { Chapter, ChapterParagraph, Work } from '../types/novel';
@@ -16,7 +21,13 @@ export const WriterStudioPage: React.FC = () => {
     deleteChapter,
     duplicateChapter,
     reorderChapters,
-    importDocxChapters
+    importDocxChapters,
+    authRole,
+    isAuthRequired,
+    scratchpadNotes,
+    typewriterMode,
+    setTypewriterMode,
+    setChapterWordTarget
   } = useNovel();
 
   // Selected Chapter State
@@ -59,16 +70,23 @@ export const WriterStudioPage: React.FC = () => {
   const [showOutline, setShowOutline] = useState(true);
   const [isZenMode, setIsZenMode] = useState(false);
   const [isBookPreviewMode, setIsBookPreviewMode] = useState(false);
+  const [editingTarget, setEditingTarget] = useState(false);
+  const [targetInput, setTargetInput] = useState('');
 
-  // Drag-and-drop chapter states
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-
-  // Modals & Upload
+  // Modals & Drawers
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isMasterKeysModalOpen, setIsMasterKeysModalOpen] = useState(false);
+  const [isSnapshotsDrawerOpen, setIsSnapshotsDrawerOpen] = useState(false);
+  const [isScratchpadDrawerOpen, setIsScratchpadDrawerOpen] = useState(false);
+  const [isDatabaseModalOpen, setIsDatabaseModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [pendingParsedDocx, setPendingParsedDocx] = useState<ParseDocxResult | null>(null);
   const [isParsingDocx, setIsParsingDocx] = useState(false);
   const [isExportingEpub, setIsExportingEpub] = useState(false);
+
+  // Drag-and-drop chapter states
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   // Inline rename chapter state
   const [editingChapterTitleId, setEditingChapterTitleId] = useState<number | null>(null);
@@ -77,7 +95,19 @@ export const WriterStudioPage: React.FC = () => {
   // Refs
   const manuscriptFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Global Keyboard Shortcuts (Zen Mode toggle via F, Escape to exit)
+  // Check URL query for direct writer key authentication (e.g. /studio?key=WRITER-123)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const keyParam = urlParams.get('key') || urlParams.get('access_key');
+      if (keyParam) {
+        // Clear param from URL cleanly
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+  }, []);
+
+  // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -89,9 +119,12 @@ export const WriterStudioPage: React.FC = () => {
       if (e.key === 'Escape') {
         if (isZenMode) setIsZenMode(false);
         if (isBookPreviewMode) setIsBookPreviewMode(false);
+        if (isSnapshotsDrawerOpen) setIsSnapshotsDrawerOpen(false);
+        if (isScratchpadDrawerOpen) setIsScratchpadDrawerOpen(false);
         return;
       }
 
+      // Shortcut: F for Zen Mode
       if (e.key === 'f' || e.key === 'F') {
         if (!isInput && !e.ctrlKey && !e.metaKey && !e.altKey) {
           e.preventDefault();
@@ -102,7 +135,7 @@ export const WriterStudioPage: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isZenMode, isBookPreviewMode]);
+  }, [isZenMode, isBookPreviewMode, isSnapshotsDrawerOpen, isScratchpadDrawerOpen]);
 
   // Handle Full Manuscript DOCX
   const handleFullDocxFile = async (file: File) => {
@@ -231,6 +264,10 @@ export const WriterStudioPage: React.FC = () => {
 
   const selectedIndex = chapters.findIndex((c) => c.id === selectedChapter?.id);
   const romanNumber = toRomanNumeral(selectedIndex >= 0 ? selectedIndex + 1 : 1);
+  const currentSnapshotsCount = selectedChapter?.snapshots?.length || 0;
+  const targetWords = selectedChapter?.targetWordCount;
+  const currentWordCount = selectedChapter?.wordCount || 0;
+  const progressPercent = targetWords ? Math.min(100, Math.round((currentWordCount / targetWords) * 100)) : null;
 
   return (
     <div className="w-full min-h-[calc(100vh-4rem)] bg-[var(--bg)] text-[var(--text)] flex flex-col">
@@ -250,8 +287,8 @@ export const WriterStudioPage: React.FC = () => {
 
       {/* 1. QUIET EDITORIAL STUDIO BAR */}
       {!isZenMode && (
-        <div className="border-b border-[var(--border)] bg-[var(--paper-tint)]/30 px-4 sm:px-8 py-2.5 flex items-center justify-between gap-4 text-xs font-mono-meta">
-          {/* Left: Outline Toggle & Chapter Context */}
+        <div className="border-b border-[var(--border)] bg-[var(--paper-tint)]/30 px-4 sm:px-8 py-2 flex items-center justify-between gap-4 text-xs font-mono-meta flex-wrap">
+          {/* Left: Outline Toggle & Status */}
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
@@ -269,24 +306,94 @@ export const WriterStudioPage: React.FC = () => {
 
             <span className="text-[var(--border)] hidden sm:inline">|</span>
 
-            <span className="font-editorial-body text-sm italic text-[var(--text-muted)] truncate hidden sm:inline">
+            {/* Friend's Master Authority Badge / Login */}
+            {authRole === 'master' ? (
+              <button
+                type="button"
+                onClick={() => setIsMasterKeysModalOpen(true)}
+                className="px-2 py-0.5 border border-[var(--text)] text-[var(--text)] bg-[var(--bg)] hover:bg-[var(--text)] hover:text-[var(--bg)] transition-colors cursor-pointer flex items-center gap-1"
+                title="Master Author Controls & Writer Pass Delegation"
+              >
+                <span>🗝</span>
+                <span className="hidden sm:inline">MASTER AUTHOR</span>
+              </button>
+            ) : authRole === 'writer' ? (
+              <span className="px-2 py-0.5 border border-[var(--border)] text-[var(--text-muted)]">
+                ✒ WRITER ACCESS
+              </span>
+            ) : isAuthRequired ? (
+              <button
+                type="button"
+                onClick={() => setIsAuthModalOpen(true)}
+                className="px-2 py-0.5 border border-amber-800 text-amber-800 hover:bg-amber-800 hover:text-white transition-colors cursor-pointer"
+              >
+                🔒 UNLOCK STUDIO
+              </button>
+            ) : null}
+
+            <span className="font-editorial-body text-sm italic text-[var(--text-muted)] truncate hidden md:inline">
               Chapter {romanNumber} — {selectedChapter?.title}
             </span>
           </div>
 
-          {/* Right: Actions */}
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Book Preview Toggle */}
+          {/* Right: Flagship Tools & Actions */}
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {/* Book View Toggle */}
             <button
               type="button"
               onClick={() => setIsBookPreviewMode(!isBookPreviewMode)}
-              className={`px-3 py-1 border transition-colors cursor-pointer ${
+              className={`px-2.5 py-1 border transition-colors cursor-pointer ${
                 isBookPreviewMode
                   ? 'border-[var(--text)] bg-[var(--text)] text-[var(--bg)] font-medium'
                   : 'border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--text)] hover:text-[var(--text)]'
               }`}
+              title="Toggle between writing desk and typeset book view"
             >
               {isBookPreviewMode ? 'EDITOR' : 'BOOK VIEW'}
+            </button>
+
+            {/* Revisions / Snapshots Drawer Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsSnapshotsDrawerOpen(true)}
+              className="px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              title="Version history and saved chapter snapshots"
+            >
+              SNAPSHOTS ({currentSnapshotsCount})
+            </button>
+
+            {/* Marginalia / Scratchpad Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsScratchpadDrawerOpen(true)}
+              className="px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              title="Character notes, plot reminders, research fragments"
+            >
+              SCRATCHPAD ({scratchpadNotes.length})
+            </button>
+
+            {/* Typewriter Mode Toggle */}
+            <button
+              type="button"
+              onClick={() => setTypewriterMode(!typewriterMode)}
+              className={`hidden sm:inline-block px-2.5 py-1 border transition-colors cursor-pointer ${
+                typewriterMode
+                  ? 'border-[var(--text)] bg-[var(--text)] text-[var(--bg)]'
+                  : 'border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--text)]'
+              }`}
+              title="Center cursor like a mechanical typewriter"
+            >
+              TYPEWRITER
+            </button>
+
+            {/* Database & Cloud Sync Modal */}
+            <button
+              type="button"
+              onClick={() => setIsDatabaseModalOpen(true)}
+              className="px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              title="Easily modifiable JSON/CSV backups and cloud sync"
+            >
+              DATABASE
             </button>
 
             {/* Import DOCX */}
@@ -294,7 +401,7 @@ export const WriterStudioPage: React.FC = () => {
               type="button"
               onClick={() => manuscriptFileInputRef.current?.click()}
               disabled={isParsingDocx}
-              className="px-3 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text)] transition-colors cursor-pointer disabled:opacity-50"
+              className="px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text)] transition-colors cursor-pointer disabled:opacity-50"
             >
               {isParsingDocx ? 'PARSING...' : 'IMPORT DOCX'}
             </button>
@@ -304,7 +411,7 @@ export const WriterStudioPage: React.FC = () => {
               type="button"
               onClick={handleExportEpub}
               disabled={isExportingEpub}
-              className="hidden md:inline-block px-3 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text)] transition-colors cursor-pointer disabled:opacity-50"
+              className="hidden lg:inline-block px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text)] transition-colors cursor-pointer disabled:opacity-50"
             >
               {isExportingEpub ? 'EXPORTING...' : 'EPUB 3 ↓'}
             </button>
@@ -313,7 +420,7 @@ export const WriterStudioPage: React.FC = () => {
             <button
               type="button"
               onClick={() => window.print()}
-              className="hidden lg:inline-block px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              className="hidden xl:inline-block px-2 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
               title="Print Edition PDF"
             >
               PRINT ⎙
@@ -323,16 +430,16 @@ export const WriterStudioPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsZenMode(true)}
-              className="px-2.5 py-1 text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              className="px-2 py-1 text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
               title="Distraction-free writing mode (Shortcut: F)"
             >
               ZEN (F)
             </button>
 
-            {/* Live Novel Link */}
+            {/* Reader Link */}
             <Link
               to="/novel"
-              className="px-3 py-1 bg-[var(--text)] text-[var(--bg)] hover:opacity-85 transition-opacity"
+              className="px-2.5 py-1 bg-[var(--text)] text-[var(--bg)] hover:opacity-85 transition-opacity"
             >
               READ →
             </Link>
@@ -516,7 +623,11 @@ export const WriterStudioPage: React.FC = () => {
         {/* ========================================================== */}
         {/* CENTER WRITING DESK (OR TYPESET BOOK PREVIEW)             */}
         {/* ========================================================== */}
-        <main className="flex-1 flex flex-col h-[calc(100vh-7.5rem)] overflow-y-auto bg-[var(--bg)]">
+        <main
+          className={`flex-1 flex flex-col h-[calc(100vh-7.5rem)] overflow-y-auto bg-[var(--bg)] ${
+            typewriterMode ? 'pb-[45vh]' : ''
+          }`}
+        >
           {isBookPreviewMode ? (
             /* ==================================================== */
             /* PURE BOOK TYPESET VIEW (CALM, EDITORIAL, FULL-WIDTH) */
@@ -607,14 +718,78 @@ export const WriterStudioPage: React.FC = () => {
               {/* Chapter Header Controls */}
               {selectedChapter && (
                 <div className="mb-6 pb-6 border-b border-[var(--border)]/70 space-y-3">
-                  <div className="flex items-center justify-between font-mono-meta text-[10px] text-[var(--text-muted)]">
+                  <div className="flex items-center justify-between font-mono-meta text-[10px] text-[var(--text-muted)] flex-wrap gap-2">
                     <span className="tracking-[0.2em] uppercase">
                       CHAPTER {romanNumber}
                     </span>
-                    <span className="text-[var(--text-faint)]">
-                      {selectedChapter.wordCount || 0} WORDS · {selectedChapter.readingTimeMin || 1} MIN READ
-                    </span>
+
+                    {/* Word Target & Pacing meter */}
+                    <div className="flex items-center gap-2">
+                      {editingTarget ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            value={targetInput}
+                            autoFocus
+                            onChange={(e) => setTargetInput(e.target.value)}
+                            placeholder="Target words..."
+                            className="w-20 px-1 py-0.5 border border-[var(--border)] bg-transparent text-[10px]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const val = parseInt(targetInput);
+                              setChapterWordTarget(selectedChapter.id, isNaN(val) ? undefined : val);
+                              setEditingTarget(false);
+                            }}
+                            className="px-1.5 py-0.5 bg-[var(--text)] text-[var(--bg)]"
+                          >
+                            SET
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingTarget(false)}
+                            className="px-1 text-[var(--text-faint)]"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTargetInput(targetWords ? String(targetWords) : '2000');
+                            setEditingTarget(true);
+                          }}
+                          className="hover:underline cursor-pointer"
+                          title="Click to set chapter word goal"
+                        >
+                          {targetWords ? (
+                            <span>
+                              {currentWordCount} / {targetWords} W ({progressPercent}%)
+                            </span>
+                          ) : (
+                            <span className="text-[var(--text-faint)]">+ SET TARGET</span>
+                          )}
+                        </button>
+                      )}
+
+                      <span>·</span>
+                      <span className="text-[var(--text-faint)]">
+                        {currentWordCount} WORDS · {selectedChapter.readingTimeMin || 1} MIN READ
+                      </span>
+                    </div>
                   </div>
+
+                  {/* Target Progress Bar */}
+                  {targetWords && (
+                    <div className="w-full bg-[var(--paper-tint)] h-[2px] overflow-hidden">
+                      <div
+                        className="bg-[var(--text)] h-full transition-all duration-300"
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+                  )}
 
                   {/* Chapter Title Input */}
                   <input
@@ -688,7 +863,34 @@ export const WriterStudioPage: React.FC = () => {
         </main>
       </div>
 
-      {/* IMPORT REVIEW MODAL */}
+      {/* DRAWERS & MODALS */}
+      <StudioAuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
+
+      <MasterKeysModal
+        isOpen={isMasterKeysModalOpen}
+        onClose={() => setIsMasterKeysModalOpen(false)}
+      />
+
+      <ChapterSnapshotsDrawer
+        isOpen={isSnapshotsDrawerOpen}
+        onClose={() => setIsSnapshotsDrawerOpen(false)}
+        chapterId={selectedChapter.id}
+        chapterTitle={selectedChapter.title}
+      />
+
+      <ScratchpadDrawer
+        isOpen={isScratchpadDrawerOpen}
+        onClose={() => setIsScratchpadDrawerOpen(false)}
+      />
+
+      <DatabaseModal
+        isOpen={isDatabaseModalOpen}
+        onClose={() => setIsDatabaseModalOpen(false)}
+      />
+
       {pendingParsedDocx && (
         <ImportReviewModal
           isOpen={isImportModalOpen}

@@ -44,6 +44,26 @@ export interface ChapterParagraph {
   isAsterism?: boolean;
 }
 
+export interface ChapterSnapshot {
+  id: string;
+  chapterId: number;
+  title: string;
+  contentHtml: string;
+  wordCount: number;
+  createdAt: number;
+  note?: string;
+}
+
+export interface ScratchpadNote {
+  id: string;
+  workId?: string;
+  chapterId?: number;
+  title: string;
+  content: string;
+  tag: 'character' | 'plot' | 'research' | 'dialogue' | 'scratch';
+  updatedAt: number;
+}
+
 export interface Chapter {
   id: number;
   numberRoman: string; // "I", "II", "III", etc.
@@ -53,6 +73,7 @@ export interface Chapter {
   slug: string;
   readingTimeMin: number;
   wordCount: number;
+  targetWordCount?: number;
   characterCount?: number;
   date: string;
   epigraph?: {
@@ -65,6 +86,8 @@ export interface Chapter {
   scenes?: Scene[];
   contentHtml?: string;
   notes?: AuthorNote[];
+  snapshots?: ChapterSnapshot[];
+  scratchpad?: string;
   nextSlug?: string;
   prevSlug?: string;
 }
@@ -75,12 +98,14 @@ export interface Work {
   title: string;
   subtitle?: string;
   author: string;
+  primaryAuthorId?: string;
   type: WorkType;
   status: WorkStatus;
   year: string;
   description: string;
   synopsis?: string;
   wordCount?: number;
+  targetTotalWords?: number;
   heroExcerpt?: string;
   coverImage?: string;
   category: string;
@@ -90,6 +115,14 @@ export interface Work {
   estimatedTotalReadingTime: string;
   readCount?: number;
   likesCount?: number;
+}
+
+export interface AccessKey {
+  code: string;
+  role: 'master' | 'writer';
+  label: string;
+  createdAt: number;
+  revoked: boolean;
 }
 
 export interface WriterProfile {
