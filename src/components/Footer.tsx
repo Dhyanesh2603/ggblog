@@ -7,8 +7,8 @@ export const Footer: React.FC = () => {
   const { novelMeta } = useNovel();
 
   return (
-    <footer className="w-full border-t border-[var(--border)] mt-24 py-12 text-[var(--text-muted)] transition-colors duration-200">
-      <div className="editorial-container flex flex-col md:flex-row items-baseline justify-between gap-6">
+    <footer className="w-full border-t border-[var(--border)] mt-16 sm:mt-24 py-8 sm:py-12 text-[var(--text-muted)] transition-colors duration-200">
+      <div className="editorial-container flex flex-col sm:flex-row items-start sm:items-baseline justify-between gap-6">
         <div className="space-y-1">
           <div className="font-mono-meta text-[11px] tracking-[0.14em] text-[var(--text)]">
             {(novelMeta.author || AUTHOR_DATA.name).toUpperCase()} © {novelMeta.year}
@@ -18,26 +18,18 @@ export const Footer: React.FC = () => {
           </p>
         </div>
 
-        <nav className="flex flex-wrap items-center gap-6 sm:gap-8 font-mono-meta text-[10.5px] tracking-[0.14em]">
-          <Link to="/novel" className="hover:text-[var(--text)] transition-colors">
+        <nav className="flex flex-wrap items-center gap-4 sm:gap-8 font-mono-meta text-[10.5px] tracking-[0.14em]">
+          <Link to="/novel" className="hover:text-[var(--text)] py-1 transition-colors">
             THE NOVEL
           </Link>
-          <Link to="/reading" className="hover:text-[var(--text)] transition-colors">
+          <Link to="/reading" className="hover:text-[var(--text)] py-1 transition-colors">
             READING
           </Link>
-          <Link to="/submissions" className="hover:text-[var(--text)] transition-colors">
+          <Link to="/submissions" className="hover:text-[var(--text)] py-1 transition-colors">
             SUBMISSIONS
           </Link>
-          <Link to="/about" className="hover:text-[var(--text)] transition-colors">
+          <Link to="/about" className="hover:text-[var(--text)] py-1 transition-colors">
             ABOUT
-          </Link>
-          <Link
-            to="/studio"
-            className="hover:text-[var(--text)] opacity-40 hover:opacity-100 transition-opacity flex items-center gap-1"
-            title="Private Author Atelier"
-          >
-            <span>※</span>
-            <span>ATELIER</span>
           </Link>
         </nav>
       </div>

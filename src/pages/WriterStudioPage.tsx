@@ -77,11 +77,12 @@ export const WriterStudioPage: React.FC = () => {
   };
 
   // UI state
-  const [showOutline, setShowOutline] = useState(true);
+  const [showOutline, setShowOutline] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 768 : false));
   const [isZenMode, setIsZenMode] = useState(false);
   const [isBookPreviewMode, setIsBookPreviewMode] = useState(false);
   const [editingTarget, setEditingTarget] = useState(false);
   const [targetInput, setTargetInput] = useState('');
+  const [isMobileToolsOpen, setIsMobileToolsOpen] = useState(false);
 
   // Modals & Drawers
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -513,12 +514,38 @@ export const WriterStudioPage: React.FC = () => {
 
           {/* Right: Flagship Tools & Actions */}
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {/* Mobile Tools Drawer Trigger */}
+            <button
+              type="button"
+              onClick={() => setIsMobileToolsOpen(true)}
+              className="lg:hidden px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text)] transition-colors cursor-pointer flex items-center gap-1 font-semibold"
+              title="Open Atelier Toolbelt"
+            >
+              <span>TOOLS</span>
+              <span>▾</span>
+            </button>
+
+            {/* Book View Toggle (Always visible) */}
+            <button
+              type="button"
+              onClick={() => setIsBookPreviewMode(!isBookPreviewMode)}
+              className={`px-2.5 py-1 border transition-colors cursor-pointer ${
+                isBookPreviewMode
+                  ? 'border-[var(--text)] bg-[var(--text)] text-[var(--bg)] font-medium'
+                  : 'border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--text)] hover:text-[var(--text)]'
+              }`}
+              title="Toggle between writing desk and typeset book view"
+            >
+              {isBookPreviewMode ? 'EDITOR' : 'BOOK VIEW'}
+            </button>
+
+            {/* Desktop Tools (Hidden on mobile to keep bar clean) */}
             {/* Writer Submissions (Visible only to Master Author & Developer) */}
             {(authRole === 'master' || authRole === 'developer') && (
               <button
                 type="button"
                 onClick={() => setIsApplicationsDrawerOpen(true)}
-                className="px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer flex items-center gap-1.5"
+                className="hidden lg:inline-flex px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer items-center gap-1.5"
                 title="Review incoming writer applications and issue passes"
               >
                 <span>SUBMISSIONS</span>
@@ -534,7 +561,7 @@ export const WriterStudioPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsSprintModalOpen(true)}
-              className="px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              className="hidden lg:inline-block px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
               title="Timed writing sprint and flow pacing"
             >
               SPRINT
@@ -544,7 +571,7 @@ export const WriterStudioPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsInspectorModalOpen(true)}
-              className="px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              className="hidden lg:inline-block px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
               title="Inspect dialogue ratio, sentence cadence, and readability"
             >
               INSPECT
@@ -554,7 +581,7 @@ export const WriterStudioPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsFindReplaceOpen(!isFindReplaceOpen)}
-              className={`px-2.5 py-1 border transition-colors cursor-pointer ${
+              className={`hidden lg:inline-block px-2.5 py-1 border transition-colors cursor-pointer ${
                 isFindReplaceOpen
                   ? 'border-[var(--text)] bg-[var(--text)] text-[var(--bg)] font-medium'
                   : 'border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--text)] hover:text-[var(--text)]'
@@ -564,25 +591,11 @@ export const WriterStudioPage: React.FC = () => {
               FIND
             </button>
 
-            {/* Book View Toggle */}
-            <button
-              type="button"
-              onClick={() => setIsBookPreviewMode(!isBookPreviewMode)}
-              className={`px-2.5 py-1 border transition-colors cursor-pointer ${
-                isBookPreviewMode
-                  ? 'border-[var(--text)] bg-[var(--text)] text-[var(--bg)] font-medium'
-                  : 'border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--text)] hover:text-[var(--text)]'
-              }`}
-              title="Toggle between writing desk and typeset book view"
-            >
-              {isBookPreviewMode ? 'EDITOR' : 'BOOK VIEW'}
-            </button>
-
             {/* Revisions / Snapshots Drawer Toggle */}
             <button
               type="button"
               onClick={() => setIsSnapshotsDrawerOpen(true)}
-              className="px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              className="hidden sm:inline-block px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
               title="Version history and saved chapter snapshots"
             >
               SNAPSHOTS ({currentSnapshotsCount})
@@ -592,7 +605,7 @@ export const WriterStudioPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsScratchpadDrawerOpen(true)}
-              className="px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              className="hidden sm:inline-block px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
               title="Character notes, plot reminders, research fragments"
             >
               SCRATCHPAD ({scratchpadNotes.length})
@@ -602,7 +615,7 @@ export const WriterStudioPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setTypewriterMode(!typewriterMode)}
-              className={`hidden sm:inline-block px-2.5 py-1 border transition-colors cursor-pointer ${
+              className={`hidden xl:inline-block px-2.5 py-1 border transition-colors cursor-pointer ${
                 typewriterMode
                   ? 'border-[var(--text)] bg-[var(--text)] text-[var(--bg)]'
                   : 'border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--text)]'
@@ -616,7 +629,7 @@ export const WriterStudioPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setTypewriterSound(!typewriterSound)}
-              className={`hidden md:inline-block px-2.5 py-1 border transition-colors cursor-pointer ${
+              className={`hidden xl:inline-block px-2.5 py-1 border transition-colors cursor-pointer ${
                 typewriterSound
                   ? 'border-[var(--text)] bg-[var(--text)] text-[var(--bg)] font-medium'
                   : 'border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--text)]'
@@ -633,14 +646,14 @@ export const WriterStudioPage: React.FC = () => {
               className="px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text)] transition-colors cursor-pointer"
               title="Export chapter or novel to Markdown, Text, EPUB, PDF"
             >
-              {isExportingEpub ? 'EXPORTING...' : 'EXPORT HUB'}
+              {isExportingEpub ? 'EXPORTING...' : 'EXPORT'}
             </button>
 
             {/* Database & Cloud Sync Modal */}
             <button
               type="button"
               onClick={() => setIsDatabaseModalOpen(true)}
-              className="px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              className="hidden lg:inline-block px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
               title="Easily modifiable JSON/CSV backups and cloud sync"
             >
               DATABASE
@@ -651,7 +664,7 @@ export const WriterStudioPage: React.FC = () => {
               type="button"
               onClick={() => manuscriptFileInputRef.current?.click()}
               disabled={isParsingDocx}
-              className="px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text)] transition-colors cursor-pointer disabled:opacity-50"
+              className="hidden sm:inline-block px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text)] transition-colors cursor-pointer disabled:opacity-50"
             >
               {isParsingDocx ? 'PARSING...' : 'DOCX'}
             </button>
@@ -660,7 +673,7 @@ export const WriterStudioPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsZenMode(true)}
-              className="px-2 py-1 text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              className="hidden sm:inline-block px-2 py-1 text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
               title="Distraction-free writing mode (Shortcut: F)"
             >
               ZEN (F)
@@ -707,51 +720,72 @@ export const WriterStudioPage: React.FC = () => {
         {/* LEFT COLLAPSIBLE CHAPTER LIST                             */}
         {/* ========================================================== */}
         {showOutline && !isZenMode && (
-          <aside className="w-64 sm:w-72 border-r border-[var(--border)] bg-[var(--paper-tint)]/20 flex flex-col shrink-0 h-[calc(100vh-7.5rem)]">
-            {/* Sidebar Header */}
-            <div className="p-3.5 border-b border-[var(--border)] flex items-center justify-between">
-              <div>
-                <span className="font-mono-meta text-[9.5px] tracking-[0.16em] text-[var(--text-muted)] uppercase block">
-                  MANUSCRIPT
-                </span>
-                <span className="font-editorial-body text-xs italic text-[var(--text-faint)]">
-                  {chapters.length} chapters · {getWorkWordCount(currentWork).toLocaleString()} words
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => addChapter()}
-                className="font-mono-meta text-[10px] px-2 py-1 bg-[var(--text)] text-[var(--bg)] hover:opacity-85 transition-opacity cursor-pointer"
-                title="Add New Chapter"
-              >
-                + CHAPTER
-              </button>
-            </div>
-
-            {/* Chapters List */}
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
-              {chapters.map((ch, idx) => {
-                const isSelected = ch.id === selectedChapter?.id;
-                const roman = toRomanNumeral(idx + 1);
-                const isBeingDragged = draggedIndex === idx;
-                const isDragOver = dragOverIndex === idx;
-
-                return (
-                  <div
-                    key={ch.id}
-                    draggable
-                    onDragStart={() => handleDragStart(idx)}
-                    onDragOver={(e) => handleDragOver(e, idx)}
-                    onDrop={() => handleDrop(idx)}
-                    onClick={() => setSelectedChapterId(ch.id)}
-                    className={`group px-2.5 py-2 transition-all flex items-center justify-between gap-2 cursor-pointer border ${
-                      isSelected
-                        ? 'border-[var(--text)] bg-[var(--bg)] font-medium'
-                        : 'border-transparent hover:border-[var(--border)] bg-transparent'
-                    } ${isBeingDragged ? 'opacity-30' : ''} ${
-                      isDragOver ? 'border-t-2 border-t-[var(--text)]' : ''
-                    }`}
+          <>
+            {/* Mobile Backdrop */}
+            <div
+              className="md:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px]"
+              onClick={() => setShowOutline(false)}
+            />
+            <aside className="fixed inset-y-0 left-0 z-50 md:static md:z-auto w-72 sm:w-80 md:w-72 border-r border-[var(--border)] bg-[var(--bg)] md:bg-[var(--paper-tint)]/20 flex flex-col shrink-0 h-full md:h-[calc(100vh-7.5rem)] shadow-2xl md:shadow-none">
+              {/* Sidebar Header */}
+              <div className="p-3.5 border-b border-[var(--border)] flex items-center justify-between">
+                <div>
+                  <span className="font-mono-meta text-[9.5px] tracking-[0.16em] text-[var(--text-muted)] uppercase block">
+                    MANUSCRIPT
+                  </span>
+                  <span className="font-editorial-body text-xs italic text-[var(--text-faint)]">
+                    {chapters.length} chapters · {getWorkWordCount(currentWork).toLocaleString()} words
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => addChapter()}
+                    className="font-mono-meta text-[10px] px-2 py-1 bg-[var(--text)] text-[var(--bg)] hover:opacity-85 transition-opacity cursor-pointer"
+                    title="Add New Chapter"
                   >
+                    + CHAPTER
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowOutline(false)}
+                    className="md:hidden font-mono-meta text-[11px] px-2 py-1 border border-[var(--border)] hover:bg-[var(--text)] hover:text-[var(--bg)] cursor-pointer"
+                    aria-label="Close chapters drawer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* Chapters List */}
+              <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                {chapters.map((ch, idx) => {
+                  const isSelected = ch.id === selectedChapter?.id;
+                  const roman = toRomanNumeral(idx + 1);
+                  const isBeingDragged = draggedIndex === idx;
+                  const isDragOver = dragOverIndex === idx;
+
+                  return (
+                    <div
+                      key={ch.id}
+                      draggable
+                      onDragStart={() => handleDragStart(idx)}
+                      onDragOver={(e) => handleDragOver(e, idx)}
+                      onDrop={() => handleDrop(idx)}
+                      onClick={() => {
+                        setSelectedChapterId(ch.id);
+                        if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                          setShowOutline(false);
+                        }
+                      }}
+                      className={`group px-2.5 py-2 transition-all flex items-center justify-between gap-2 cursor-pointer border ${
+                        isSelected
+                          ? 'border-[var(--text)] bg-[var(--bg)] font-medium'
+                          : 'border-transparent hover:border-[var(--border)] bg-transparent'
+                      } ${isBeingDragged ? 'opacity-30' : ''} ${
+                        isDragOver ? 'border-t-2 border-t-[var(--text)]' : ''
+                      }`}
+                    >
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       {/* Drag Handle */}
                       <span
@@ -856,7 +890,8 @@ export const WriterStudioPage: React.FC = () => {
               </button>
             </div>
           </aside>
-        )}
+        </>
+      )}
 
         {/* ========================================================== */}
         {/* CENTER WRITING DESK (OR TYPESET BOOK PREVIEW)             */}
@@ -870,14 +905,14 @@ export const WriterStudioPage: React.FC = () => {
             /* ==================================================== */
             /* PURE BOOK TYPESET VIEW (CALM, EDITORIAL, FULL-WIDTH) */
             /* ==================================================== */
-            <div className="max-w-2xl w-full mx-auto px-6 sm:px-12 py-16">
-              <div className="border border-[var(--border)] bg-[var(--bg)] p-8 sm:p-14 shadow-xs">
+            <div className="max-w-2xl w-full mx-auto px-3 xs:px-6 sm:px-12 py-8 sm:py-16">
+              <div className="border border-[var(--border)] bg-[var(--bg)] p-4 xs:p-8 sm:p-14 shadow-xs">
                 {/* Book View Header */}
-                <div className="text-center pb-8 border-b border-[var(--border)]/70 mb-10 space-y-2">
+                <div className="text-center pb-6 sm:pb-8 border-b border-[var(--border)]/70 mb-8 sm:mb-10 space-y-2">
                   <div className="font-mono-meta text-[10px] tracking-[0.24em] text-[var(--text-muted)] uppercase">
                     CHAPTER {romanNumber}
                   </div>
-                  <h1 className="font-editorial-title text-4xl sm:text-5xl text-[var(--text)]">
+                  <h1 className="font-editorial-title text-3xl xs:text-4xl sm:text-5xl text-[var(--text)]">
                     {selectedChapter?.title}
                   </h1>
                   {selectedChapter?.subtitle && (
@@ -952,7 +987,7 @@ export const WriterStudioPage: React.FC = () => {
             /* ==================================================== */
             /* WRITING DESK (SPACIOUS, TYPOGRAPHY-FIRST TIPTAP)     */
             /* ==================================================== */
-            <div className="max-w-2xl sm:max-w-3xl w-full mx-auto px-6 sm:px-12 py-10 flex-1 flex flex-col">
+            <div className="max-w-2xl sm:max-w-3xl w-full mx-auto px-3 xs:px-6 sm:px-12 py-6 sm:py-10 flex-1 flex flex-col">
               {/* Chapter Header Controls */}
               {selectedChapter && (
                 <div className="mb-6 pb-6 border-b border-[var(--border)]/70 space-y-3">
@@ -1035,7 +1070,7 @@ export const WriterStudioPage: React.FC = () => {
                     value={selectedChapter.title}
                     onChange={(e) => updateChapter(selectedChapter.id, { title: e.target.value })}
                     placeholder="Chapter Title..."
-                    className="w-full font-editorial-title text-4xl sm:text-5xl text-[var(--text)] bg-transparent border-none focus:outline-none placeholder-[var(--text-faint)] font-normal leading-tight"
+                    className="w-full font-editorial-title text-3xl xs:text-4xl sm:text-5xl text-[var(--text)] bg-transparent border-none focus:outline-none placeholder-[var(--text-faint)] font-normal leading-tight"
                   />
 
                   {/* Subtitle Input */}
@@ -1102,6 +1137,191 @@ export const WriterStudioPage: React.FC = () => {
       </div>
 
       {/* DRAWERS & MODALS */}
+      {/* MOBILE TOOLS SHEET (Responsive companion for writer on mobile phones) */}
+      {isMobileToolsOpen && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60 backdrop-blur-[2px] transition-opacity duration-200 lg:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Atelier Tools"
+        >
+          <div
+            className="flex-1 cursor-pointer"
+            onClick={() => setIsMobileToolsOpen(false)}
+          />
+          <div className="bg-[var(--bg)] border-t border-[var(--border)] p-5 sm:p-6 shadow-2xl max-h-[82vh] overflow-y-auto space-y-4 animate-slide-up">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
+              <div>
+                <span className="font-mono-meta text-[10px] tracking-[0.2em] text-[var(--text-muted)] uppercase block">
+                  ATELIER WRITER SUITE
+                </span>
+                <span className="font-editorial-title text-xl text-[var(--text)]">
+                  Studio Toolbelt
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMobileToolsOpen(false)}
+                className="font-mono-meta text-xs tracking-wider px-3 py-1.5 border border-[var(--border)] hover:bg-[var(--text)] hover:text-[var(--bg)] cursor-pointer"
+              >
+                CLOSE [×]
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 font-mono-meta text-[11px] tracking-wider">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileToolsOpen(false);
+                  setIsSprintModalOpen(true);
+                }}
+                className="p-3 border border-[var(--border)] text-left hover:border-[var(--text)] transition-colors flex flex-col gap-1 cursor-pointer"
+              >
+                <span className="text-[var(--text)] font-semibold">SPRINT</span>
+                <span className="text-[9px] text-[var(--text-muted)] normal-case font-normal">Paced writing timer</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileToolsOpen(false);
+                  setIsInspectorModalOpen(true);
+                }}
+                className="p-3 border border-[var(--border)] text-left hover:border-[var(--text)] transition-colors flex flex-col gap-1 cursor-pointer"
+              >
+                <span className="text-[var(--text)] font-semibold">INSPECT</span>
+                <span className="text-[9px] text-[var(--text-muted)] normal-case font-normal">Stylometrics & rhythm</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileToolsOpen(false);
+                  setIsFindReplaceOpen(true);
+                }}
+                className="p-3 border border-[var(--border)] text-left hover:border-[var(--text)] transition-colors flex flex-col gap-1 cursor-pointer"
+              >
+                <span className="text-[var(--text)] font-semibold">FIND & REPLACE</span>
+                <span className="text-[9px] text-[var(--text-muted)] normal-case font-normal">Search chapter text</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileToolsOpen(false);
+                  setIsSnapshotsDrawerOpen(true);
+                }}
+                className="p-3 border border-[var(--border)] text-left hover:border-[var(--text)] transition-colors flex flex-col gap-1 cursor-pointer"
+              >
+                <span className="text-[var(--text)] font-semibold">SNAPSHOTS ({currentSnapshotsCount})</span>
+                <span className="text-[9px] text-[var(--text-muted)] normal-case font-normal">Version backups</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileToolsOpen(false);
+                  setIsScratchpadDrawerOpen(true);
+                }}
+                className="p-3 border border-[var(--border)] text-left hover:border-[var(--text)] transition-colors flex flex-col gap-1 cursor-pointer"
+              >
+                <span className="text-[var(--text)] font-semibold">SCRATCHPAD</span>
+                <span className="text-[9px] text-[var(--text-muted)] normal-case font-normal">{scratchpadNotes.length} notes</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileToolsOpen(false);
+                  setIsExportHubOpen(true);
+                }}
+                className="p-3 border border-[var(--border)] text-left hover:border-[var(--text)] transition-colors flex flex-col gap-1 cursor-pointer"
+              >
+                <span className="text-[var(--text)] font-semibold">EXPORT HUB</span>
+                <span className="text-[9px] text-[var(--text-muted)] normal-case font-normal">EPUB, PDF, Text</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileToolsOpen(false);
+                  setIsDatabaseModalOpen(true);
+                }}
+                className="p-3 border border-[var(--border)] text-left hover:border-[var(--text)] transition-colors flex flex-col gap-1 cursor-pointer"
+              >
+                <span className="text-[var(--text)] font-semibold">DATABASE</span>
+                <span className="text-[9px] text-[var(--text-muted)] normal-case font-normal">JSON / CSV sync</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileToolsOpen(false);
+                  manuscriptFileInputRef.current?.click();
+                }}
+                className="p-3 border border-[var(--border)] text-left hover:border-[var(--text)] transition-colors flex flex-col gap-1 cursor-pointer"
+              >
+                <span className="text-[var(--text)] font-semibold">DOCX IMPORT</span>
+                <span className="text-[9px] text-[var(--text-muted)] normal-case font-normal">Word manuscript</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTypewriterSound(!typewriterSound);
+                }}
+                className="p-3 border border-[var(--border)] text-left hover:border-[var(--text)] transition-colors flex flex-col gap-1 cursor-pointer"
+              >
+                <span className="text-[var(--text)] font-semibold">TYPEWRITER AUDIO</span>
+                <span className="text-[9px] text-[var(--text-muted)] normal-case font-normal">{typewriterSound ? 'Status: ON' : 'Status: OFF'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileToolsOpen(false);
+                  setIsZenMode(true);
+                }}
+                className="p-3 border border-[var(--border)] text-left hover:border-[var(--text)] transition-colors flex flex-col gap-1 cursor-pointer"
+              >
+                <span className="text-[var(--text)] font-semibold">ZEN MODE</span>
+                <span className="text-[9px] text-[var(--text-muted)] normal-case font-normal">Distraction-free</span>
+              </button>
+
+              {(authRole === 'master' || authRole === 'developer') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileToolsOpen(false);
+                    setIsApplicationsDrawerOpen(true);
+                  }}
+                  className="col-span-2 p-3 border border-[var(--text)] text-left hover:bg-[var(--text)] hover:text-[var(--bg)] transition-colors flex items-center justify-between cursor-pointer"
+                >
+                  <span className="font-semibold">REVIEW WRITER SUBMISSIONS</span>
+                  {pendingApplicationsCount > 0 && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500 text-black font-bold">
+                      {pendingApplicationsCount} PENDING
+                    </span>
+                  )}
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileToolsOpen(false);
+                  setIsMasterKeysModalOpen(true);
+                }}
+                className="col-span-2 p-3 border border-[var(--border)] text-left hover:border-[var(--text)] transition-colors flex items-center justify-between cursor-pointer"
+              >
+                <span className="font-semibold">AUTHOR KEYS & PASSES</span>
+                <span className="text-[9px] text-[var(--text-muted)]">GOVERNANCE →</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <StudioAuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}

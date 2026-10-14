@@ -35,7 +35,7 @@ export const BookCoverArt: React.FC = () => {
   };
 
   return (
-    <div className="relative group perspective-[1000px] w-full max-w-[340px] sm:max-w-[360px] mx-auto select-none">
+    <div className="relative group perspective-[1000px] w-full max-w-[270px] xs:max-w-[300px] sm:max-w-[340px] md:max-w-[360px] mx-auto select-none">
       <Link
         to={`/novel/${firstChapterSlug}`}
         viewTransition
@@ -47,7 +47,7 @@ export const BookCoverArt: React.FC = () => {
           onMouseMove={handleMouseMove}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
-          className="relative transition-all duration-300 ease-out p-8 sm:p-10 bg-[var(--paper-tint)] border border-[var(--border)] shadow-lg hover:shadow-2xl active:scale-[0.985] flex flex-col justify-between aspect-[1/1.42] overflow-hidden rounded-[2px] cursor-pointer"
+          className="relative transition-all duration-300 ease-out p-6 xs:p-8 sm:p-10 bg-[var(--paper-tint)] border border-[var(--border)] shadow-lg hover:shadow-2xl active:scale-[0.985] flex flex-col justify-between aspect-[1/1.42] overflow-hidden rounded-[2px] cursor-pointer"
           style={{
             transform: `rotateX(${rotate.x}deg) rotateY(${rotate.y}deg) translateY(${isHovered ? '-6px' : '0px'})`,
             boxShadow: isHovered
@@ -64,12 +64,12 @@ export const BookCoverArt: React.FC = () => {
 
           {/* Blind debossed inner frame */}
           <div
-            className="absolute inset-3 border border-[var(--border)] pointer-events-none opacity-60"
+            className="absolute inset-2 sm:inset-3 border border-[var(--border)] pointer-events-none opacity-60"
             aria-hidden="true"
           />
 
           {/* Top Folio Header */}
-          <div className="relative z-10 flex items-center justify-between text-[10px] font-mono-meta tracking-[0.2em] text-[var(--text-muted)] border-b border-[var(--border-faint)] pb-3">
+          <div className="relative z-10 flex items-center justify-between text-[9px] sm:text-[10px] font-mono-meta tracking-[0.2em] text-[var(--text-muted)] border-b border-[var(--border-faint)] pb-2.5 sm:pb-3">
             <span>FOLIO NO. 01</span>
             <span>※ {novelMeta.year}</span>
           </div>
@@ -84,24 +84,24 @@ export const BookCoverArt: React.FC = () => {
           )}
 
           {/* Cover Typographic Heart */}
-          <div className="relative z-10 my-auto py-8 text-center space-y-4">
-            <span className="font-mono-meta text-[9.5px] tracking-[0.24em] text-[var(--text-faint)] block uppercase">
+          <div className="relative z-10 my-auto py-4 sm:py-8 text-center space-y-2.5 sm:space-y-4">
+            <span className="font-mono-meta text-[9px] sm:text-[9.5px] tracking-[0.24em] text-[var(--text-faint)] block uppercase">
               {novelMeta.subtitle || 'A Serialized Novel'}
             </span>
 
-            <h2 className="font-editorial-title text-4xl sm:text-5xl text-[var(--text)] tracking-tight leading-[0.95]">
+            <h2 className="font-editorial-title text-3xl xs:text-4xl sm:text-5xl text-[var(--text)] tracking-tight leading-[0.95]">
               {novelMeta.title}
             </h2>
 
             <div className="w-8 h-[1px] bg-[var(--text)] mx-auto opacity-30" />
 
-            <p className="font-editorial-body text-base italic text-[var(--text-muted)]">
+            <p className="font-editorial-body text-sm sm:text-base italic text-[var(--text-muted)]">
               by {novelMeta.author}
             </p>
           </div>
 
           {/* Bottom Colophon / Action hint */}
-          <div className="relative z-10 pt-4 border-t border-[var(--border-faint)] flex items-center justify-between font-mono-meta text-[9.5px] tracking-[0.16em] text-[var(--text-muted)]">
+          <div className="relative z-10 pt-3 sm:pt-4 border-t border-[var(--border-faint)] flex items-center justify-between font-mono-meta text-[9px] sm:text-[9.5px] tracking-[0.16em] text-[var(--text-muted)]">
             <span className="opacity-75">FIRST EDITION</span>
             <span className="text-[var(--text)] group-hover:translate-x-1 transition-transform inline-flex items-center gap-1 font-semibold">
               <span>READ NOVEL</span>

@@ -7,16 +7,16 @@ export const ReadingPage: React.FC = () => {
 
   return (
     <div className="w-full">
-      <section className="editorial-container pt-16 md:pt-24 pb-24 md:pb-32">
+      <section className="editorial-container pt-10 sm:pt-16 md:pt-24 pb-16 sm:pb-24 md:pb-32">
         {/* Page Folio */}
-        <header className="max-w-2xl space-y-4 pb-12 border-b border-[var(--border)]">
+        <header className="max-w-2xl space-y-3 sm:space-y-4 pb-8 sm:pb-12 border-b border-[var(--border)]">
           <span className="font-mono-meta text-[11px] md:text-xs tracking-[0.18em] text-[var(--text-muted)] block">
             AUTHOR'S LIBRARY & SHELF
           </span>
-          <h1 className="font-editorial-title text-6xl sm:text-7xl tracking-tight text-[var(--text)]">
+          <h1 className="font-editorial-title text-4xl xs:text-5xl sm:text-6xl md:text-7xl tracking-tight text-[var(--text)]">
             Reading
           </h1>
-          <p className="font-editorial-body text-xl text-[var(--text-muted)] italic">
+          <p className="font-editorial-body text-lg sm:text-xl text-[var(--text-muted)] italic">
             An informal index of books kept on the desk. No ratings, no algorithms, only personal marginalia.
           </p>
         </header>

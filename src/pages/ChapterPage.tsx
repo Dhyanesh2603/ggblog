@@ -281,7 +281,7 @@ export const ChapterPage: React.FC = () => {
                 className="hover:text-[var(--text)] transition-colors flex items-center gap-1.5 cursor-pointer font-medium"
                 title="Distraction-Free Zen Mode (Press F)"
               >
-                <span>ZEN (F)</span>
+                <span>ZEN<span className="hidden sm:inline"> (F)</span></span>
               </button>
 
               {/* Font sizing buttons */}
@@ -366,7 +366,7 @@ export const ChapterPage: React.FC = () => {
       )}
 
       {/* 3. The Digital Book Canvas */}
-      <div className={`editorial-container ${isZenMode ? 'pt-8 md:pt-16' : 'pt-16 md:pt-28'}`}>
+      <div className={`editorial-container ${isZenMode ? 'pt-6 md:pt-16' : 'pt-10 sm:pt-16 md:pt-28'}`}>
         <div className="reading-column">
           {/* Chapter Folio Header */}
           <header className="mb-14 md:mb-20 space-y-4 text-left">
@@ -466,9 +466,9 @@ export const ChapterPage: React.FC = () => {
                     >
                       <span className="font-mono-meta text-[10px] tracking-[0.16em] text-[var(--text-muted)] group-hover:text-[var(--text)] transition-colors flex items-center gap-1">
                         <span>←</span>
-                        <span>PREVIOUS CHAPTER</span>
+                        <span>PREVIOUS</span>
                       </span>
-                      <span className="font-editorial-title text-xl sm:text-2xl text-[var(--text)] group-hover:italic transition-all block">
+                      <span className="font-editorial-title text-base sm:text-2xl text-[var(--text)] group-hover:italic transition-all block line-clamp-2">
                         {prevChapter.title}
                       </span>
                     </Link>
@@ -479,9 +479,9 @@ export const ChapterPage: React.FC = () => {
                       className="group block text-left space-y-1"
                     >
                       <span className="font-mono-meta text-[10px] tracking-[0.16em] text-[var(--text-muted)]">
-                        ← COVER & INDEX
+                        ← INDEX
                       </span>
-                      <span className="font-editorial-title text-xl text-[var(--text)] block">
+                      <span className="font-editorial-title text-base sm:text-xl text-[var(--text)] block line-clamp-2">
                         Table of Contents
                       </span>
                     </Link>
@@ -498,10 +498,10 @@ export const ChapterPage: React.FC = () => {
                       className="group block text-right space-y-1"
                     >
                       <span className="font-mono-meta text-[10px] tracking-[0.16em] text-[var(--text-muted)] group-hover:text-[var(--text)] transition-colors flex items-center justify-end gap-1">
-                        <span>NEXT CHAPTER</span>
+                        <span>NEXT</span>
                         <span>→</span>
                       </span>
-                      <span className="font-editorial-title text-xl sm:text-2xl text-[var(--text)] group-hover:italic transition-all block">
+                      <span className="font-editorial-title text-base sm:text-2xl text-[var(--text)] group-hover:italic transition-all block line-clamp-2">
                         {nextChapter.title}
                       </span>
                     </Link>

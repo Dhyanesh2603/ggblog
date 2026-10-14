@@ -117,10 +117,10 @@ export const WriterApplicationPage: React.FC = () => {
           <div className="space-y-10">
             {/* Header */}
             <div className="space-y-3">
-              <h1 className="font-editorial-title text-5xl sm:text-6xl text-[var(--text)] tracking-tight">
+              <h1 className="font-editorial-title text-3xl xs:text-4xl sm:text-5xl md:text-6xl text-[var(--text)] tracking-tight">
                 Call for Submissions
               </h1>
-              <p className="font-editorial-body text-xl sm:text-2xl italic text-[var(--text-muted)]">
+              <p className="font-editorial-body text-lg sm:text-2xl italic text-[var(--text-muted)]">
                 The atelier considers unhurried, physical literature for digital serialization.
               </p>
               <p className="font-editorial-body text-sm sm:text-base text-[var(--text-muted)] pt-2 leading-relaxed max-w-2xl">
@@ -289,14 +289,14 @@ export const WriterApplicationPage: React.FC = () => {
               </div>
 
               {/* Submit Button */}
-              <div className="pt-4 flex items-center justify-between border-t border-[var(--border)]">
+              <div className="pt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-t border-[var(--border)]">
                 <span className="font-mono-meta text-[10px] text-[var(--text-muted)] tracking-wider">
                   ※ DIRECT DISPATCH TO MASTER AUTHOR
                 </span>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="font-mono-meta text-xs tracking-[0.16em] px-8 py-3.5 bg-[var(--text)] text-[var(--bg)] hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50"
+                  className="w-full sm:w-auto font-mono-meta text-xs tracking-[0.16em] px-8 py-3.5 bg-[var(--text)] text-[var(--bg)] hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50 text-center"
                 >
                   {isSubmitting ? 'DISPATCHING FOLIO...' : 'TRANSMIT SUBMISSION →'}
                 </button>

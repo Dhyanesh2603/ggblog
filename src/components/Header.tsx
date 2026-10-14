@@ -6,7 +6,7 @@ import type { ReadingTheme } from '../types/novel';
 
 export const Header: React.FC = () => {
   const location = useLocation();
-  const { currentWork, authRole } = useNovel();
+  const { currentWork } = useNovel();
   const {
     theme,
     setTheme,
@@ -85,22 +85,6 @@ export const Header: React.FC = () => {
           >
             ABOUT
           </Link>
-
-          {/* Conditional Author/Developer Atelier Link (Only visible when authenticated) */}
-          {(authRole === 'master' || authRole === 'developer') && (
-            <Link
-              to="/studio"
-              className={`transition-opacity flex items-center gap-1.5 px-2 py-0.5 border border-[var(--border)] ${
-                location.pathname.startsWith('/studio')
-                  ? 'border-[var(--text)] bg-[var(--text)] text-[var(--bg)] font-semibold'
-                  : 'text-[var(--text)] hover:border-[var(--text)]'
-              }`}
-              title="Atelier Writer Studio (Author Sanctum)"
-            >
-              <span>※</span>
-              <span>ATELIER</span>
-            </Link>
-          )}
         </nav>
 
         {/* Right side controls: Reader Font Scale + Chapters Drawer + Theme Switcher */}

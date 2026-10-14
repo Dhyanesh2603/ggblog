@@ -50,11 +50,11 @@ export const MobileMenu: React.FC = () => {
       </div>
 
       {/* Main Editorial Nav Links */}
-      <nav className="flex flex-col gap-6 my-auto py-8">
+      <nav className="flex flex-col gap-4 sm:gap-6 my-auto py-6">
         <Link
           to="/"
           onClick={handleNavClick}
-          className={`font-editorial-title text-4xl sm:text-5xl tracking-tight transition-colors ${
+          className={`font-editorial-title text-3xl sm:text-4xl md:text-5xl tracking-tight transition-colors ${
             location.pathname === '/' ? 'text-[var(--text)] italic' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
           }`}
         >
@@ -63,7 +63,7 @@ export const MobileMenu: React.FC = () => {
         <Link
           to="/novel"
           onClick={handleNavClick}
-          className={`font-editorial-title text-4xl sm:text-5xl tracking-tight transition-colors ${
+          className={`font-editorial-title text-3xl sm:text-4xl md:text-5xl tracking-tight transition-colors ${
             location.pathname.startsWith('/novel') ? 'text-[var(--text)] italic' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
           }`}
         >
@@ -72,7 +72,7 @@ export const MobileMenu: React.FC = () => {
         <Link
           to="/reading"
           onClick={handleNavClick}
-          className={`font-editorial-title text-4xl sm:text-5xl tracking-tight transition-colors ${
+          className={`font-editorial-title text-3xl sm:text-4xl md:text-5xl tracking-tight transition-colors ${
             location.pathname.startsWith('/reading') ? 'text-[var(--text)] italic' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
           }`}
         >
@@ -81,7 +81,7 @@ export const MobileMenu: React.FC = () => {
         <Link
           to="/submissions"
           onClick={handleNavClick}
-          className={`font-editorial-title text-4xl sm:text-5xl tracking-tight transition-colors ${
+          className={`font-editorial-title text-3xl sm:text-4xl md:text-5xl tracking-tight transition-colors ${
             location.pathname.startsWith('/submissions') || location.pathname.startsWith('/apply')
               ? 'text-[var(--text)] italic'
               : 'text-[var(--text-muted)] hover:text-[var(--text)]'
@@ -92,19 +92,11 @@ export const MobileMenu: React.FC = () => {
         <Link
           to="/about"
           onClick={handleNavClick}
-          className={`font-editorial-title text-4xl sm:text-5xl tracking-tight transition-colors ${
+          className={`font-editorial-title text-3xl sm:text-4xl md:text-5xl tracking-tight transition-colors ${
             location.pathname.startsWith('/about') ? 'text-[var(--text)] italic' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
           }`}
         >
           About the Author
-        </Link>
-        <Link
-          to="/studio"
-          onClick={handleNavClick}
-          className="font-mono-meta text-xs tracking-[0.16em] text-[var(--text-muted)] hover:text-[var(--text)] pt-2 opacity-60 flex items-center gap-1.5"
-        >
-          <span>※</span>
-          <span>AUTHOR ATELIER PORTAL</span>
         </Link>
       </nav>
 

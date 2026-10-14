@@ -102,7 +102,7 @@ export const HomePage: React.FC = () => {
 
             {/* Novel Title with magnetic presence */}
             <div className="space-y-3">
-              <h1 className="animate-reveal-2 font-editorial-title text-5xl xs:text-6xl sm:text-7xl md:text-8xl lg:text-9xl tracking-tight text-[var(--text)] leading-[0.92] max-w-full break-words">
+              <h1 className="animate-reveal-2 font-editorial-title text-4xl xs:text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl tracking-tight text-[var(--text)] leading-[0.98] sm:leading-[0.92] max-w-full break-words">
                 {novelMeta.title}
               </h1>
 
@@ -114,9 +114,9 @@ export const HomePage: React.FC = () => {
             </div>
 
             {/* Dynamic Interactive Excerpt Switcher */}
-            <div className="animate-reveal-4 pt-4 sm:pt-6">
-              <div className="relative min-h-[140px] sm:min-h-[120px] flex flex-col justify-between p-5 sm:p-6 bg-[var(--paper-tint)]/60 border-l-2 border-[var(--text)] transition-all duration-300">
-                <blockquote className="font-editorial-body text-xl sm:text-2xl leading-relaxed text-[var(--text)] font-light">
+            <div className="animate-reveal-4 pt-3 sm:pt-6">
+              <div className="relative min-h-[140px] sm:min-h-[120px] flex flex-col justify-between p-4 sm:p-6 bg-[var(--paper-tint)]/60 border-l-2 border-[var(--text)] transition-all duration-300">
+                <blockquote className="font-editorial-body text-lg sm:text-2xl leading-relaxed text-[var(--text)] font-light">
                   “{currentQuote.quote}”
                 </blockquote>
 
@@ -146,11 +146,11 @@ export const HomePage: React.FC = () => {
             </div>
 
             {/* Primary Actions: Begin Reading & Continue Progress */}
-            <div className="animate-reveal-5 pt-4 flex flex-col sm:flex-row sm:items-center items-start gap-4 sm:gap-6">
+            <div className="animate-reveal-5 pt-3 sm:pt-4 flex flex-col sm:flex-row sm:items-center items-stretch gap-3 sm:gap-6">
               <Link
                 to={`/novel/${firstChapterSlug}`}
                 viewTransition
-                className="group inline-flex items-center gap-3 font-mono-meta text-xs md:text-sm tracking-[0.18em] text-[var(--text)] py-3.5 px-6 border border-[var(--text)] hover:bg-[var(--text)] hover:text-[var(--bg)] transition-all duration-200 shadow-sm cursor-pointer"
+                className="w-full sm:w-auto text-center justify-center group inline-flex items-center gap-3 font-mono-meta text-xs md:text-sm tracking-[0.18em] text-[var(--text)] py-3.5 px-6 border border-[var(--text)] hover:bg-[var(--text)] hover:text-[var(--bg)] transition-all duration-200 shadow-sm cursor-pointer"
               >
                 <span>BEGIN READING</span>
                 <span className="inline-block transition-transform duration-200 group-hover:translate-x-1.5">
@@ -160,12 +160,12 @@ export const HomePage: React.FC = () => {
 
               <a
                 href="#opening-scene"
-                className="font-mono-meta text-xs tracking-[0.14em] text-[var(--text-muted)] hover:text-[var(--text)] underline decoration-dotted underline-offset-4"
+                className="w-full sm:w-auto text-center font-mono-meta text-xs tracking-[0.14em] text-[var(--text-muted)] hover:text-[var(--text)] underline decoration-dotted underline-offset-4 py-2 sm:py-0"
               >
                 SAMPLE PROLOGUE BELOW ↓
               </a>
 
-              <span className="font-mono-meta text-[11px] tracking-[0.12em] text-[var(--text-faint)] sm:ml-auto">
+              <span className="w-full sm:w-auto text-center sm:text-left font-mono-meta text-[11px] tracking-[0.12em] text-[var(--text-faint)] sm:ml-auto">
                 {activeChapters.length} CHAPTERS · ~{novelMeta.estimatedTotalReadingTime}
               </span>
             </div>
@@ -227,12 +227,13 @@ export const HomePage: React.FC = () => {
                 const isSelected = hoveredChapter.id === ch.id;
 
                 return (
-                  <div
+                  <Link
                     key={ch.id}
+                    to={`/novel/${ch.slug}`}
+                    viewTransition
                     onMouseEnter={() => setHoveredChapterId(ch.id)}
-                    onClick={() => setHoveredChapterId(ch.id)}
-                    className={`group py-5 sm:py-6 transition-all duration-200 cursor-pointer ${
-                      isSelected ? 'pl-3 border-l-2 border-[var(--text)] bg-[var(--paper-tint)]/40' : 'hover:pl-2'
+                    className={`group py-5 sm:py-6 transition-all duration-200 block border-b border-[var(--border)] last:border-b-0 cursor-pointer ${
+                      isSelected ? 'pl-3 border-l-2 border-l-[var(--text)] bg-[var(--paper-tint)]/40' : 'hover:pl-2'
                     }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
@@ -259,16 +260,14 @@ export const HomePage: React.FC = () => {
                             {progress.percentage}%
                           </span>
                         ) : (
-                          <Link
-                            to={`/novel/${ch.slug}`}
-                            className="font-mono-meta text-[11px] opacity-0 group-hover:opacity-100 transition-opacity text-[var(--text)] hover:underline hidden sm:inline"
-                          >
-                            READ →
-                          </Link>
+                          <span className="font-mono-meta text-[11px] text-[var(--text)] font-semibold inline-flex items-center gap-1 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span>READ</span>
+                            <span>→</span>
+                          </span>
                         )}
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
