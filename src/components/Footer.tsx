@@ -25,11 +25,19 @@ export const Footer: React.FC = () => {
           <Link to="/reading" className="hover:text-[var(--text)] transition-colors">
             READING
           </Link>
-          <Link to="/studio" className="hover:text-[var(--text)] transition-colors text-[var(--text)] font-semibold">
-            STUDIO
+          <Link to="/submissions" className="hover:text-[var(--text)] transition-colors">
+            SUBMISSIONS
           </Link>
           <Link to="/about" className="hover:text-[var(--text)] transition-colors">
             ABOUT
+          </Link>
+          <Link
+            to="/studio"
+            className="hover:text-[var(--text)] opacity-40 hover:opacity-100 transition-opacity flex items-center gap-1"
+            title="Private Author Atelier"
+          >
+            <span>※</span>
+            <span>ATELIER</span>
           </Link>
         </nav>
       </div>

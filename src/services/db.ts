@@ -1,4 +1,4 @@
-import type { Work, ScratchpadNote, AccessKey, WriterProfile } from '../types/novel';
+import type { Work, ScratchpadNote, AccessKey, WriterProfile, WriterApplication } from '../types/novel';
 
 export interface DatabaseExportPayload {
   version: number;
@@ -7,6 +7,7 @@ export interface DatabaseExportPayload {
   accessKeys: AccessKey[];
   works: Work[];
   scratchpadNotes: ScratchpadNote[];
+  writerApplications?: WriterApplication[];
 }
 
 export const DEFAULT_MASTER_KEY = 'ATELIER-MASTER-2026';
@@ -50,6 +51,23 @@ export const INITIAL_SCRATCHPAD: ScratchpadNote[] = [
     content: 'Carries a brass level from 1894. Never speaks about the mainland. Smells of cold wool and steeped tea.',
     tag: 'character',
     updatedAt: Date.now()
+  }
+];
+
+export const INITIAL_APPLICATIONS: WriterApplication[] = [
+  {
+    id: 'app-editorial-01',
+    name: 'Julian Mercer',
+    penName: 'J. M. Mercer',
+    email: 'mercer.prose@meridian.org',
+    portfolioUrl: 'https://meridianjournal.org/mercer',
+    workType: 'novel',
+    proposedTitle: 'The Sound of Receding Bells',
+    pitch: 'A quiet historical narrative following an itinerant bellfounder across Brittany in the winter of 1888, casting bronze bells for church towers that no longer have congregations.',
+    sampleExcerpt: 'The furnace clay had cracked twice before November, and each time Julian had sealed it with river loam and salt. He worked in sheepskin gloves with the fingers cut out, his knuckles raw and violet in the draught from the quay.',
+    statement: 'I write slow, physical literature about work, solitude, and vanishing trades. The typography of this atelier is the only home I envision for this manuscript.',
+    status: 'pending',
+    submittedAt: Date.now() - 1000 * 60 * 60 * 14
   }
 ];
 

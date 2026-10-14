@@ -6,7 +6,7 @@ import type { ReadingTheme } from '../types/novel';
 
 export const Header: React.FC = () => {
   const location = useLocation();
-  const { currentWork } = useNovel();
+  const { currentWork, authRole } = useNovel();
   const {
     theme,
     setTheme,
@@ -56,17 +56,6 @@ export const Header: React.FC = () => {
             THE NOVEL
           </Link>
           <Link
-            to="/studio"
-            className={`transition-opacity flex items-center gap-1.5 ${
-              location.pathname.startsWith('/studio')
-                ? 'text-[var(--text)] font-semibold'
-                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-            }`}
-          >
-            <span>STUDIO</span>
-            <span className="text-[9px] px-1 py-0.2 border border-[var(--border)] text-[var(--text)]">WRITER</span>
-          </Link>
-          <Link
             to="/reading"
             className={`transition-opacity ${
               location.pathname.startsWith('/reading')
@@ -75,6 +64,16 @@ export const Header: React.FC = () => {
             }`}
           >
             READING
+          </Link>
+          <Link
+            to="/submissions"
+            className={`transition-opacity ${
+              location.pathname.startsWith('/submissions') || location.pathname.startsWith('/apply')
+                ? 'text-[var(--text)] font-semibold'
+                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+            }`}
+          >
+            SUBMISSIONS
           </Link>
           <Link
             to="/about"
@@ -86,10 +85,26 @@ export const Header: React.FC = () => {
           >
             ABOUT
           </Link>
+
+          {/* Conditional Author/Developer Atelier Link (Only visible when authenticated) */}
+          {(authRole === 'master' || authRole === 'developer') && (
+            <Link
+              to="/studio"
+              className={`transition-opacity flex items-center gap-1.5 px-2 py-0.5 border border-[var(--border)] ${
+                location.pathname.startsWith('/studio')
+                  ? 'border-[var(--text)] bg-[var(--text)] text-[var(--bg)] font-semibold'
+                  : 'text-[var(--text)] hover:border-[var(--text)]'
+              }`}
+              title="Atelier Writer Studio (Author Sanctum)"
+            >
+              <span>※</span>
+              <span>ATELIER</span>
+            </Link>
+          )}
         </nav>
 
-        {/* Right side controls: Chapters Drawer + Theme Switcher */}
-        <div className="flex items-center gap-3 sm:gap-6">
+        {/* Right side controls: Reader Font Scale + Chapters Drawer + Theme Switcher */}
+        <div className="flex items-center gap-2.5 sm:gap-4">
           {/* Table of Contents trigger on Desktop */}
           <button
             type="button"

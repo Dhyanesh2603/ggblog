@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { NovelProvider } from './context/NovelContext';
 import { ReadingProvider, useReading } from './context/ReadingContext';
 import { Header } from './components/Header';
@@ -16,6 +16,7 @@ import { WriterStudioPage } from './pages/WriterStudioPage';
 import { WriterDashboardPage } from './pages/WriterDashboardPage';
 import { ExplorePage } from './pages/ExplorePage';
 import { WriterProfilePage } from './pages/WriterProfilePage';
+import { WriterApplicationPage } from './pages/WriterApplicationPage';
 
 // Instant wipe of browser data if ?clearData, ?reset, or ?clear=true is present in URL
 if (typeof window !== 'undefined') {
@@ -55,6 +56,10 @@ function AnimatedRoutes() {
       <Routes location={location}>
         <Route path="/" element={<HomePage />} />
         <Route path="/dashboard" element={<WriterDashboardPage />} />
+        <Route path="/submissions" element={<WriterApplicationPage />} />
+        <Route path="/apply" element={<WriterApplicationPage />} />
+        <Route path="/atelier" element={<WriterStudioPage />} />
+        <Route path="/author-sanctum" element={<WriterStudioPage />} />
         <Route path="/studio" element={<WriterStudioPage />} />
         <Route path="/studio/:workId" element={<WriterStudioPage />} />
         <Route path="/explore" element={<ExplorePage />} />
@@ -87,12 +92,31 @@ function AppLayout() {
   );
 }
 
+// Global Author Sanctuary Shortcut: Ctrl+Shift+A opens Atelier
+function AuthorSanctumHotKey() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'a' || e.key === 'A')) {
+        e.preventDefault();
+        navigate('/studio');
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [navigate]);
+
+  return null;
+}
+
 export function App() {
   return (
     <BrowserRouter>
       <NovelProvider>
         <ReadingProvider>
           <ScrollRestoration />
+          <AuthorSanctumHotKey />
           <AppLayout />
         </ReadingProvider>
       </NovelProvider>

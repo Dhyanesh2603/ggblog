@@ -70,15 +70,6 @@ export const MobileMenu: React.FC = () => {
           The Novel
         </Link>
         <Link
-          to="/studio"
-          onClick={handleNavClick}
-          className={`font-editorial-title text-4xl sm:text-5xl tracking-tight transition-colors ${
-            location.pathname.startsWith('/studio') ? 'text-[var(--text)] italic' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-          }`}
-        >
-          Writer Studio
-        </Link>
-        <Link
           to="/reading"
           onClick={handleNavClick}
           className={`font-editorial-title text-4xl sm:text-5xl tracking-tight transition-colors ${
@@ -88,6 +79,17 @@ export const MobileMenu: React.FC = () => {
           Reading Archive
         </Link>
         <Link
+          to="/submissions"
+          onClick={handleNavClick}
+          className={`font-editorial-title text-4xl sm:text-5xl tracking-tight transition-colors ${
+            location.pathname.startsWith('/submissions') || location.pathname.startsWith('/apply')
+              ? 'text-[var(--text)] italic'
+              : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+          }`}
+        >
+          Submissions
+        </Link>
+        <Link
           to="/about"
           onClick={handleNavClick}
           className={`font-editorial-title text-4xl sm:text-5xl tracking-tight transition-colors ${
@@ -95,6 +97,14 @@ export const MobileMenu: React.FC = () => {
           }`}
         >
           About the Author
+        </Link>
+        <Link
+          to="/studio"
+          onClick={handleNavClick}
+          className="font-mono-meta text-xs tracking-[0.16em] text-[var(--text-muted)] hover:text-[var(--text)] pt-2 opacity-60 flex items-center gap-1.5"
+        >
+          <span>※</span>
+          <span>AUTHOR ATELIER PORTAL</span>
         </Link>
       </nav>
 

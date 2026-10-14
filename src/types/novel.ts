@@ -175,3 +175,21 @@ export interface ReadingShelfItem {
   lastReadDate?: string;
   status?: 'reading' | 'completed' | 'want_to_read';
 }
+
+export interface WriterApplication {
+  id: string;
+  name: string;
+  penName?: string;
+  email: string;
+  portfolioUrl?: string;
+  workType: WorkType;
+  proposedTitle: string;
+  pitch: string;
+  sampleExcerpt: string;
+  statement: string;
+  status: 'pending' | 'approved' | 'rejected';
+  submittedAt: number;
+  reviewedAt?: number;
+  assignedKey?: string;
+  reviewNotes?: string;
+}

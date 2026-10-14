@@ -7,7 +7,8 @@ import type {
   Scene,
   AccessKey,
   ChapterSnapshot,
-  ScratchpadNote
+  ScratchpadNote,
+  WriterApplication
 } from '../types/novel';
 import { DEFAULT_WORKS, DEFAULT_WRITER_PROFILE } from '../data/defaultWorks';
 import { toRomanNumeral } from '../utils/docxParser';
@@ -15,6 +16,7 @@ import {
   DEFAULT_DEVELOPER_KEY,
   INITIAL_ACCESS_KEYS,
   INITIAL_SCRATCHPAD,
+  INITIAL_APPLICATIONS,
   exportDatabaseToJson,
   exportChaptersToCsv,
   generateRandomWriterKey,
@@ -30,6 +32,8 @@ const AUTH_KEY_STORAGE_KEY = 'literary_auth_key';
 const AUTH_REQUIRED_STORAGE_KEY = 'literary_auth_required';
 const SCRATCHPAD_STORAGE_KEY = 'literary_scratchpad_notes';
 const TYPEWRITER_MODE_STORAGE_KEY = 'literary_typewriter_mode';
+const TYPEWRITER_SOUND_STORAGE_KEY = 'literary_typewriter_sound';
+const APPLICATIONS_STORAGE_KEY = 'literary_writer_applications';
 
 interface NovelContextType {
   // Multi-Work Library
@@ -102,7 +106,16 @@ interface NovelContextType {
   // Writer Studio Preferences
   typewriterMode: boolean;
   setTypewriterMode: (enabled: boolean) => void;
+  typewriterSound: boolean;
+  setTypewriterSound: (enabled: boolean) => void;
   setChapterWordTarget: (chapterId: number, targetWords?: number) => void;
+
+  // Writer Submissions & Applications System
+  writerApplications: WriterApplication[];
+  submitWriterApplication: (data: Omit<WriterApplication, 'id' | 'submittedAt' | 'status'>) => WriterApplication;
+  approveWriterApplication: (appId: string, customNote?: string) => { application: WriterApplication; key: AccessKey } | null;
+  rejectWriterApplication: (appId: string, note?: string) => void;
+  deleteWriterApplication: (appId: string) => void;
 
   // Easily Understandable Database Operations
   exportDatabase: () => void;
@@ -180,14 +193,14 @@ export const NovelProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return null;
   });
 
-  // 7. Is Authentication Required for Studio (User can choose!)
+  // 7. Is Authentication Required for Studio (Protected by default)
   const [isAuthRequired, setIsAuthRequiredState] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(AUTH_REQUIRED_STORAGE_KEY);
       if (saved !== null) return saved === 'true';
     }
-    // Default: optional/enabled, but can be toggled freely
-    return false;
+    // Protected by default: Only the Master Author (friend) and Developer have access
+    return true;
   });
 
   // 8. Scratchpad Notes
@@ -208,6 +221,39 @@ export const NovelProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
     return false;
   });
+
+  // 10. Typewriter Mechanical Sound Toggle
+  const [typewriterSound, setTypewriterSoundState] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(TYPEWRITER_SOUND_STORAGE_KEY) === 'true';
+    }
+    return false;
+  });
+
+  // 11. Writer Submissions & Applications
+  const [writerApplications, setWriterApplications] = useState<WriterApplication[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(APPLICATIONS_STORAGE_KEY);
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return INITIAL_APPLICATIONS;
+  });
+
+  // Auto-login from URL search params (e.g. /studio?key=ATELIER-MASTER-2026 or ?key=DEV-ROOT-ACCESS-2026)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlKey = params.get('key') || params.get('pass') || params.get('token') || params.get('access_key');
+      if (urlKey) {
+        const found = accessKeys.find((k) => k.code.toLowerCase() === urlKey.trim().toLowerCase() && !k.revoked);
+        if (found) {
+          setAuthKey(found.code);
+        }
+      }
+    }
+  }, [accessKeys]);
 
   const [isCustomized, setIsCustomized] = useState(false);
 
@@ -299,6 +345,18 @@ export const NovelProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch {}
   }, [typewriterMode]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(TYPEWRITER_SOUND_STORAGE_KEY, String(typewriterSound));
+    } catch {}
+  }, [typewriterSound]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(APPLICATIONS_STORAGE_KEY, JSON.stringify(writerApplications));
+    } catch {}
+  }, [writerApplications]);
+
   // Master Key & Writer Access Handlers
   const authenticateStudio = (enteredKey: string) => {
     const trimmed = enteredKey.trim();
@@ -356,6 +414,58 @@ export const NovelProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const setTypewriterMode = (enabled: boolean) => {
     setTypewriterModeState(enabled);
+  };
+
+  const setTypewriterSound = (enabled: boolean) => {
+    setTypewriterSoundState(enabled);
+  };
+
+  // Writer Submissions & Applications Handlers
+  const submitWriterApplication = (data: Omit<WriterApplication, 'id' | 'submittedAt' | 'status'>): WriterApplication => {
+    const newApp: WriterApplication = {
+      ...data,
+      id: `app-${Date.now()}`,
+      status: 'pending',
+      submittedAt: Date.now()
+    };
+    setWriterApplications((prev) => [newApp, ...prev]);
+    return newApp;
+  };
+
+  const approveWriterApplication = (appId: string, customNote?: string): { application: WriterApplication; key: AccessKey } | null => {
+    const target = writerApplications.find((a) => a.id === appId);
+    if (!target) return null;
+
+    const newKey = generateWriterKey(`${target.name} (${target.proposedTitle || 'Fellow'})`);
+    const updatedApp: WriterApplication = {
+      ...target,
+      status: 'approved',
+      assignedKey: newKey.code,
+      reviewedAt: Date.now(),
+      reviewNotes: customNote || 'Application approved by editorial desk.'
+    };
+
+    setWriterApplications((prev) => prev.map((a) => (a.id === appId ? updatedApp : a)));
+    return { application: updatedApp, key: newKey };
+  };
+
+  const rejectWriterApplication = (appId: string, note?: string) => {
+    setWriterApplications((prev) =>
+      prev.map((a) =>
+        a.id === appId
+          ? {
+              ...a,
+              status: 'rejected',
+              reviewedAt: Date.now(),
+              reviewNotes: note || 'Declined for current folio.'
+            }
+          : a
+      )
+    );
+  };
+
+  const deleteWriterApplication = (appId: string) => {
+    setWriterApplications((prev) => prev.filter((a) => a.id !== appId));
   };
 
   // Current active work accessor
@@ -714,7 +824,8 @@ export const NovelProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       profile,
       accessKeys,
       works,
-      scratchpadNotes
+      scratchpadNotes,
+      writerApplications
     };
     exportDatabaseToJson(payload, `atelier_database_${new Date().toISOString().slice(0, 10)}.json`);
   };
@@ -734,6 +845,7 @@ export const NovelProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (data.profile) setProfile(data.profile);
       if (Array.isArray(data.accessKeys)) setAccessKeys(data.accessKeys);
       if (Array.isArray(data.scratchpadNotes)) setScratchpadNotes(data.scratchpadNotes);
+      if (Array.isArray(data.writerApplications)) setWriterApplications(data.writerApplications);
       alert('Database restored successfully!');
       return true;
     } catch (e) {
@@ -876,7 +988,14 @@ export const NovelProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         deleteScratchpadNote,
         typewriterMode,
         setTypewriterMode,
+        typewriterSound,
+        setTypewriterSound,
         setChapterWordTarget,
+        writerApplications,
+        submitWriterApplication,
+        approveWriterApplication,
+        rejectWriterApplication,
+        deleteWriterApplication,
         exportDatabase,
         exportCurrentWorkCsv,
         importDatabase

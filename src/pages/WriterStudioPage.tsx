@@ -8,6 +8,12 @@ import { MasterKeysModal } from '../components/MasterKeysModal';
 import { ChapterSnapshotsDrawer } from '../components/ChapterSnapshotsDrawer';
 import { ScratchpadDrawer } from '../components/ScratchpadDrawer';
 import { DatabaseModal } from '../components/DatabaseModal';
+import { WriterApplicationsDrawer } from '../components/WriterApplicationsDrawer';
+import { WritingSprintModal } from '../components/WritingSprintModal';
+import { LiteraryInspectorModal } from '../components/LiteraryInspectorModal';
+import { FindReplaceBar } from '../components/FindReplaceBar';
+import { ChapterExportModal } from '../components/ChapterExportModal';
+import { playTypewriterKeySound } from '../utils/typewriterAudio';
 import { parseDocxFile, type ParseDocxResult, toRomanNumeral } from '../utils/docxParser';
 import { generateEpubBlob, downloadBlob } from '../utils/epubGenerator';
 import type { Chapter, ChapterParagraph, Work } from '../types/novel';
@@ -26,7 +32,12 @@ export const WriterStudioPage: React.FC = () => {
     scratchpadNotes,
     typewriterMode,
     setTypewriterMode,
-    setChapterWordTarget
+    typewriterSound,
+    setTypewriterSound,
+    setChapterWordTarget,
+    writerApplications,
+    authenticateStudio,
+    developerBypass
   } = useNovel();
 
   // Selected Chapter State
@@ -82,6 +93,15 @@ export const WriterStudioPage: React.FC = () => {
   const [pendingParsedDocx, setPendingParsedDocx] = useState<ParseDocxResult | null>(null);
   const [isParsingDocx, setIsParsingDocx] = useState(false);
   const [isExportingEpub, setIsExportingEpub] = useState(false);
+  const [isApplicationsDrawerOpen, setIsApplicationsDrawerOpen] = useState(false);
+  const [isSprintModalOpen, setIsSprintModalOpen] = useState(false);
+  const [isInspectorModalOpen, setIsInspectorModalOpen] = useState(false);
+  const [isFindReplaceOpen, setIsFindReplaceOpen] = useState(false);
+  const [isExportHubOpen, setIsExportHubOpen] = useState(false);
+
+  // Private Author Sanctum Gate state
+  const [gatePasscode, setGatePasscode] = useState('');
+  const [gateError, setGateError] = useState('');
 
   // Drag-and-drop chapter states
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -120,6 +140,11 @@ export const WriterStudioPage: React.FC = () => {
         if (isBookPreviewMode) setIsBookPreviewMode(false);
         if (isSnapshotsDrawerOpen) setIsSnapshotsDrawerOpen(false);
         if (isScratchpadDrawerOpen) setIsScratchpadDrawerOpen(false);
+        if (isApplicationsDrawerOpen) setIsApplicationsDrawerOpen(false);
+        if (isSprintModalOpen) setIsSprintModalOpen(false);
+        if (isInspectorModalOpen) setIsInspectorModalOpen(false);
+        if (isFindReplaceOpen) setIsFindReplaceOpen(false);
+        if (isExportHubOpen) setIsExportHubOpen(false);
         return;
       }
 
@@ -134,7 +159,80 @@ export const WriterStudioPage: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isZenMode, isBookPreviewMode, isSnapshotsDrawerOpen, isScratchpadDrawerOpen]);
+  }, [
+    isZenMode,
+    isBookPreviewMode,
+    isSnapshotsDrawerOpen,
+    isScratchpadDrawerOpen,
+    isApplicationsDrawerOpen,
+    isSprintModalOpen,
+    isInspectorModalOpen,
+    isFindReplaceOpen,
+    isExportHubOpen
+  ]);
+
+  // Tactile Typewriter Audio Key Listener
+  useEffect(() => {
+    if (!typewriterSound) return;
+
+    const handleKeySound = (e: KeyboardEvent) => {
+      if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab'].includes(e.key)) return;
+      playTypewriterKeySound(e.key);
+    };
+
+    window.addEventListener('keydown', handleKeySound);
+    return () => window.removeEventListener('keydown', handleKeySound);
+  }, [typewriterSound]);
+
+  // Private Author Sanctum Gate Submit Handler
+  const handleGateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setGateError('');
+    if (!gatePasscode.trim()) {
+      setGateError('Please enter an authorization key to unlock.');
+      return;
+    }
+    const res = authenticateStudio(gatePasscode.trim());
+    if (!res.success) {
+      setGateError(res.message);
+    } else {
+      setGatePasscode('');
+    }
+  };
+
+  // Chapter Find & Replace
+  const handleReplaceAll = (findText: string, replaceText: string, matchCase: boolean) => {
+    if (!selectedChapter) return;
+    try {
+      const regex = new RegExp(
+        findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+        matchCase ? 'g' : 'gi'
+      );
+      const currentHtml = selectedChapter.contentHtml || selectedChapter.paragraphs.map((p) => `<p>${p.text}</p>`).join('');
+      const updatedHtml = currentHtml.replace(regex, replaceText);
+
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = updatedHtml;
+      const pElements = Array.from(tempDiv.querySelectorAll('p, div.editorial-asterism, blockquote, h1, h2, h3'));
+      const updatedParagraphs = pElements.map((el, i) => ({
+        id: i + 1,
+        text: el.textContent || '',
+        isAsterism: el.textContent?.trim() === '※' || el.classList.contains('editorial-asterism')
+      }));
+
+      const words = tempDiv.innerText.trim().split(/\s+/).filter(Boolean).length;
+      updateChapter(selectedChapter.id, {
+        contentHtml: updatedHtml,
+        paragraphs: updatedParagraphs,
+        wordCount: words,
+        estimatedReadingTime: `${Math.ceil(words / 225)} min`,
+        readingTimeMin: Math.ceil(words / 225)
+      });
+      alert(`Replaced occurrences in Chapter ${selectedChapter.title}`);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   // Handle Full Manuscript DOCX
   const handleFullDocxFile = async (file: File) => {
@@ -268,6 +366,72 @@ export const WriterStudioPage: React.FC = () => {
   const currentWordCount = selectedChapter?.wordCount || 0;
   const progressPercent = targetWords ? Math.min(100, Math.round((currentWordCount / targetWords) * 100)) : null;
 
+  // 1. If unauthorized, render Private Author Sanctum Gate
+  if (authRole === 'guest') {
+    return (
+      <div className="w-full min-h-[85vh] flex items-center justify-center p-6 bg-[var(--bg)] text-[var(--text)]">
+        <div className="max-w-md w-full border border-[var(--border)] p-8 sm:p-10 bg-[var(--paper-tint)]/40 shadow-xl space-y-6 text-center animate-fade-in">
+          <div className="space-y-2">
+            <span className="font-mono-meta text-[11px] tracking-[0.2em] text-[var(--text-muted)] uppercase block">
+              ※ Private Atelier Sanctum
+            </span>
+            <h1 className="font-editorial-title text-4xl text-[var(--text)]">
+              Author Access Required
+            </h1>
+            <p className="font-editorial-body text-sm text-[var(--text-muted)] italic leading-relaxed">
+              This digital writing studio is reserved exclusively for the author and editorial fellows.
+            </p>
+          </div>
+
+          <form onSubmit={handleGateSubmit} className="space-y-3 pt-2 text-left">
+            <label className="font-mono-meta text-[10px] uppercase tracking-wider text-[var(--text-muted)] block">
+              Enter Master Key or Writer Passkey:
+            </label>
+            <input
+              type="password"
+              value={gatePasscode}
+              onChange={(e) => setGatePasscode(e.target.value)}
+              placeholder="e.g. ATELIER-MASTER-2026"
+              className="w-full bg-[var(--bg)] border border-[var(--border)] px-3.5 py-2.5 font-mono text-sm text-[var(--text)] focus:border-[var(--text)] outline-none"
+            />
+            {gateError && (
+              <p className="font-editorial-body text-xs text-red-700 italic">{gateError}</p>
+            )}
+            <button
+              type="submit"
+              className="w-full py-3 bg-[var(--text)] text-[var(--bg)] font-mono-meta text-xs tracking-[0.16em] hover:opacity-90 transition-opacity cursor-pointer font-medium"
+            >
+              UNLOCK ATELIER →
+            </button>
+          </form>
+
+          {/* Developer 1-Click Root Superuser Bypass */}
+          <div className="pt-2 border-t border-[var(--border)] space-y-3">
+            <button
+              type="button"
+              onClick={developerBypass}
+              className="w-full py-2 border border-amber-800/70 text-amber-800 dark:border-amber-500/70 dark:text-amber-500 hover:bg-amber-800 hover:text-white dark:hover:bg-amber-500 dark:hover:text-black font-mono-meta text-[11px] tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <span>⚡</span>
+              <span>DEVELOPER ROOT SUPERUSER BYPASS</span>
+            </button>
+
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 font-mono-meta text-[10px] text-[var(--text-muted)] pt-2">
+              <Link to="/novel" className="hover:text-[var(--text)] underline underline-offset-4">
+                ← Return to The Novel
+              </Link>
+              <Link to="/submissions" className="hover:text-[var(--text)] underline underline-offset-4">
+                Apply for Authorship →
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const pendingApplicationsCount = writerApplications.filter((a) => a.status === 'pending').length;
+
   return (
     <div className="w-full min-h-[calc(100vh-4rem)] bg-[var(--bg)] text-[var(--text)] flex flex-col">
       {/* Hidden file input for DOCX import */}
@@ -349,6 +513,57 @@ export const WriterStudioPage: React.FC = () => {
 
           {/* Right: Flagship Tools & Actions */}
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {/* Writer Submissions (Visible only to Master Author & Developer) */}
+            {(authRole === 'master' || authRole === 'developer') && (
+              <button
+                type="button"
+                onClick={() => setIsApplicationsDrawerOpen(true)}
+                className="px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer flex items-center gap-1.5"
+                title="Review incoming writer applications and issue passes"
+              >
+                <span>SUBMISSIONS</span>
+                {pendingApplicationsCount > 0 && (
+                  <span className="text-[9.5px] px-1.5 py-0.2 rounded-full bg-[var(--text)] text-[var(--bg)] font-bold">
+                    {pendingApplicationsCount}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* Writing Sprint Timer */}
+            <button
+              type="button"
+              onClick={() => setIsSprintModalOpen(true)}
+              className="px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              title="Timed writing sprint and flow pacing"
+            >
+              SPRINT
+            </button>
+
+            {/* Literary Prose Stylometrics Inspector */}
+            <button
+              type="button"
+              onClick={() => setIsInspectorModalOpen(true)}
+              className="px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              title="Inspect dialogue ratio, sentence cadence, and readability"
+            >
+              INSPECT
+            </button>
+
+            {/* Find & Replace Bar Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsFindReplaceOpen(!isFindReplaceOpen)}
+              className={`px-2.5 py-1 border transition-colors cursor-pointer ${
+                isFindReplaceOpen
+                  ? 'border-[var(--text)] bg-[var(--text)] text-[var(--bg)] font-medium'
+                  : 'border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--text)] hover:text-[var(--text)]'
+              }`}
+              title="Search and replace within chapter"
+            >
+              FIND
+            </button>
+
             {/* Book View Toggle */}
             <button
               type="button"
@@ -397,6 +612,30 @@ export const WriterStudioPage: React.FC = () => {
               TYPEWRITER
             </button>
 
+            {/* Tactile Mechanical Typewriter Audio Toggle */}
+            <button
+              type="button"
+              onClick={() => setTypewriterSound(!typewriterSound)}
+              className={`hidden md:inline-block px-2.5 py-1 border transition-colors cursor-pointer ${
+                typewriterSound
+                  ? 'border-[var(--text)] bg-[var(--text)] text-[var(--bg)] font-medium'
+                  : 'border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--text)]'
+              }`}
+              title="Tactile mechanical typewriter click sounds"
+            >
+              SOUND: {typewriterSound ? 'ON' : 'OFF'}
+            </button>
+
+            {/* Multi-Format Export Hub */}
+            <button
+              type="button"
+              onClick={() => setIsExportHubOpen(true)}
+              className="px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text)] transition-colors cursor-pointer"
+              title="Export chapter or novel to Markdown, Text, EPUB, PDF"
+            >
+              {isExportingEpub ? 'EXPORTING...' : 'EXPORT HUB'}
+            </button>
+
             {/* Database & Cloud Sync Modal */}
             <button
               type="button"
@@ -414,27 +653,7 @@ export const WriterStudioPage: React.FC = () => {
               disabled={isParsingDocx}
               className="px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text)] transition-colors cursor-pointer disabled:opacity-50"
             >
-              {isParsingDocx ? 'PARSING...' : 'IMPORT DOCX'}
-            </button>
-
-            {/* Export EPUB */}
-            <button
-              type="button"
-              onClick={handleExportEpub}
-              disabled={isExportingEpub}
-              className="hidden lg:inline-block px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text)] transition-colors cursor-pointer disabled:opacity-50"
-            >
-              {isExportingEpub ? 'EXPORTING...' : 'EPUB 3 ↓'}
-            </button>
-
-            {/* Print / PDF */}
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="hidden xl:inline-block px-2 py-1 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
-              title="Print Edition PDF"
-            >
-              PRINT ⎙
+              {isParsingDocx ? 'PARSING...' : 'DOCX'}
             </button>
 
             {/* Zen Mode */}
@@ -457,6 +676,14 @@ export const WriterStudioPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* 1.1 FIND & REPLACE BAR (Rendered right beneath subbar when active) */}
+      <FindReplaceBar
+        isOpen={isFindReplaceOpen}
+        onClose={() => setIsFindReplaceOpen(false)}
+        onReplaceAll={handleReplaceAll}
+        currentContentText={selectedChapter?.paragraphs.map((p) => p.text).join(' ') || ''}
+      />
 
       {/* ZEN MODE FLOATING EXIT BUTTON */}
       {isZenMode && (
@@ -901,6 +1128,36 @@ export const WriterStudioPage: React.FC = () => {
         isOpen={isDatabaseModalOpen}
         onClose={() => setIsDatabaseModalOpen(false)}
       />
+
+      <WriterApplicationsDrawer
+        isOpen={isApplicationsDrawerOpen}
+        onClose={() => setIsApplicationsDrawerOpen(false)}
+      />
+
+      <WritingSprintModal
+        isOpen={isSprintModalOpen}
+        onClose={() => setIsSprintModalOpen(false)}
+        currentWordCount={selectedChapter?.wordCount || 0}
+      />
+
+      {selectedChapter && (
+        <LiteraryInspectorModal
+          isOpen={isInspectorModalOpen}
+          onClose={() => setIsInspectorModalOpen(false)}
+          chapter={selectedChapter}
+        />
+      )}
+
+      {selectedChapter && (
+        <ChapterExportModal
+          isOpen={isExportHubOpen}
+          onClose={() => setIsExportHubOpen(false)}
+          chapter={selectedChapter}
+          work={currentWork}
+          onTriggerEpub={handleExportEpub}
+          onTriggerPrint={() => window.print()}
+        />
+      )}
 
       {pendingParsedDocx && (
         <ImportReviewModal
