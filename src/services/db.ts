@@ -10,8 +10,16 @@ export interface DatabaseExportPayload {
 }
 
 export const DEFAULT_MASTER_KEY = 'ATELIER-MASTER-2026';
+export const DEFAULT_DEVELOPER_KEY = 'DEV-ROOT-ACCESS-2026';
 
 export const INITIAL_ACCESS_KEYS: AccessKey[] = [
+  {
+    code: DEFAULT_DEVELOPER_KEY,
+    role: 'developer',
+    label: 'Lead Developer / Root Superuser',
+    createdAt: Date.now() - 1000 * 60 * 60 * 24 * 30,
+    revoked: false
+  },
   {
     code: DEFAULT_MASTER_KEY,
     role: 'master',

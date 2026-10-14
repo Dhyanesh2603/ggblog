@@ -119,7 +119,7 @@ export interface Work {
 
 export interface AccessKey {
   code: string;
-  role: 'master' | 'writer';
+  role: 'developer' | 'master' | 'writer';
   label: string;
   createdAt: number;
   revoked: boolean;

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNovel } from '../context/NovelContext';
-import { DEFAULT_MASTER_KEY } from '../services/db';
+import { DEFAULT_MASTER_KEY, DEFAULT_DEVELOPER_KEY } from '../services/db';
 
 interface StudioAuthModalProps {
   isOpen: boolean;
@@ -9,7 +9,7 @@ interface StudioAuthModalProps {
 }
 
 export const StudioAuthModal: React.FC<StudioAuthModalProps> = ({ isOpen, onClose, onSuccess }) => {
-  const { authenticateStudio, setAuthRequired } = useNovel();
+  const { authenticateStudio, setAuthRequired, developerBypass } = useNovel();
   const [passcode, setPasscode] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -19,7 +19,7 @@ export const StudioAuthModal: React.FC<StudioAuthModalProps> = ({ isOpen, onClos
     e.preventDefault();
     setErrorMsg(null);
     if (!passcode.trim()) {
-      setErrorMsg('Please enter your Master Key or Writer Passcode.');
+      setErrorMsg('Please enter your Master Key, Developer Key, or Writer Passcode.');
       return;
     }
 
@@ -33,8 +33,13 @@ export const StudioAuthModal: React.FC<StudioAuthModalProps> = ({ isOpen, onClos
   };
 
   const handleBypass = () => {
-    // Allows writer to bypass or disable requirement if they prefer unrestricted access
     setAuthRequired(false);
+    onClose();
+    if (onSuccess) onSuccess();
+  };
+
+  const handleDevAccess = () => {
+    developerBypass();
     onClose();
     if (onSuccess) onSuccess();
   };
@@ -57,7 +62,7 @@ export const StudioAuthModal: React.FC<StudioAuthModalProps> = ({ isOpen, onClos
             Atelier Access
           </h2>
           <p className="font-editorial-body text-xs italic text-[var(--text-muted)] leading-relaxed">
-            Enter the Master Key or an authorized Writer Passcode to open manuscript controls.
+            Enter the Developer Key, Master Key, or an authorized Writer Passcode to open manuscript controls.
           </p>
         </div>
 
@@ -71,7 +76,7 @@ export const StudioAuthModal: React.FC<StudioAuthModalProps> = ({ isOpen, onClos
               autoFocus
               value={passcode}
               onChange={(e) => setPasscode(e.target.value)}
-              placeholder={`e.g. ${DEFAULT_MASTER_KEY}`}
+              placeholder="Enter Access Key..."
               className="w-full bg-[var(--paper-tint)]/40 border border-[var(--border)] px-3.5 py-2.5 text-xs font-mono text-[var(--text)] focus:outline-none focus:border-[var(--text)] tracking-wider"
             />
             {errorMsg && (
@@ -79,8 +84,9 @@ export const StudioAuthModal: React.FC<StudioAuthModalProps> = ({ isOpen, onClos
                 {errorMsg}
               </p>
             )}
-            <div className="font-mono-meta text-[9px] text-[var(--text-faint)] mt-1.5">
-              Default Master Key: <span className="text-[var(--text)] select-all">{DEFAULT_MASTER_KEY}</span>
+            <div className="font-mono-meta text-[8.5px] text-[var(--text-faint)] mt-2 space-y-0.5">
+              <div>Master Author: <span className="text-[var(--text)] select-all">{DEFAULT_MASTER_KEY}</span></div>
+              <div>Lead Developer: <span className="text-[var(--text)] select-all">{DEFAULT_DEVELOPER_KEY}</span></div>
             </div>
           </div>
 
@@ -92,11 +98,21 @@ export const StudioAuthModal: React.FC<StudioAuthModalProps> = ({ isOpen, onClos
               UNLOCK STUDIO →
             </button>
 
-            {/* Optional Bypass Button */}
+            {/* 1-Click Developer Superuser Access */}
+            <button
+              type="button"
+              onClick={handleDevAccess}
+              className="w-full font-mono-meta text-[10px] tracking-wider py-2 border border-[var(--border)] hover:border-[var(--text)] text-[var(--text)] transition-colors cursor-pointer text-center bg-[var(--paper-tint)]/40"
+              title="One-click full developer superuser access"
+            >
+              ⚡ DEVELOPER ROOT ACCESS (ALL PRIVILEGES)
+            </button>
+
+            {/* Optional Open Bypass Button */}
             <button
               type="button"
               onClick={handleBypass}
-              className="w-full font-mono-meta text-[10px] tracking-wider py-1.5 text-[var(--text-muted)] hover:text-[var(--text)] underline cursor-pointer text-center"
+              className="w-full font-mono-meta text-[9.5px] tracking-wider py-1 text-[var(--text-muted)] hover:text-[var(--text)] underline cursor-pointer text-center"
               title="Bypass passcode and disable lock"
             >
               Disable passcode requirement (Open Studio freely)

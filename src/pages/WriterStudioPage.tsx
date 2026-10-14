@@ -23,7 +23,6 @@ export const WriterStudioPage: React.FC = () => {
     reorderChapters,
     importDocxChapters,
     authRole,
-    isAuthRequired,
     scratchpadNotes,
     typewriterMode,
     setTypewriterMode,
@@ -306,8 +305,18 @@ export const WriterStudioPage: React.FC = () => {
 
             <span className="text-[var(--border)] hidden sm:inline">|</span>
 
-            {/* Friend's Master Authority Badge / Login */}
-            {authRole === 'master' ? (
+            {/* Role Badges & Access Controls */}
+            {authRole === 'developer' ? (
+              <button
+                type="button"
+                onClick={() => setIsMasterKeysModalOpen(true)}
+                className="px-2 py-0.5 border border-amber-800 text-amber-800 dark:border-amber-500 dark:text-amber-500 bg-amber-500/[0.08] hover:bg-amber-800 hover:text-white dark:hover:bg-amber-500 dark:hover:text-black transition-colors cursor-pointer flex items-center gap-1 font-semibold"
+                title="Developer Superuser Root Access & Access Key Governance"
+              >
+                <span>⚡</span>
+                <span className="hidden sm:inline">DEVELOPER ROOT</span>
+              </button>
+            ) : authRole === 'master' ? (
               <button
                 type="button"
                 onClick={() => setIsMasterKeysModalOpen(true)}
@@ -321,15 +330,17 @@ export const WriterStudioPage: React.FC = () => {
               <span className="px-2 py-0.5 border border-[var(--border)] text-[var(--text-muted)]">
                 ✒ WRITER ACCESS
               </span>
-            ) : isAuthRequired ? (
+            ) : (
               <button
                 type="button"
                 onClick={() => setIsAuthModalOpen(true)}
-                className="px-2 py-0.5 border border-amber-800 text-amber-800 hover:bg-amber-800 hover:text-white transition-colors cursor-pointer"
+                className="px-2 py-0.5 border border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--text)] hover:text-[var(--text)] transition-colors cursor-pointer flex items-center gap-1"
+                title="Sign in with Master Key or Developer Root"
               >
-                🔒 UNLOCK STUDIO
+                <span>🗝</span>
+                <span className="hidden sm:inline">AUTHOR ACCESS</span>
               </button>
-            ) : null}
+            )}
 
             <span className="font-editorial-body text-sm italic text-[var(--text-muted)] truncate hidden md:inline">
               Chapter {romanNumber} — {selectedChapter?.title}

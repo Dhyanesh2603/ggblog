@@ -12,6 +12,7 @@ import type {
 import { DEFAULT_WORKS, DEFAULT_WRITER_PROFILE } from '../data/defaultWorks';
 import { toRomanNumeral } from '../utils/docxParser';
 import {
+  DEFAULT_DEVELOPER_KEY,
   INITIAL_ACCESS_KEYS,
   INITIAL_SCRATCHPAD,
   exportDatabaseToJson,
@@ -77,11 +78,12 @@ interface NovelContextType {
   // Master Key & Writer Access System
   accessKeys: AccessKey[];
   authKey: string | null;
-  authRole: 'master' | 'writer' | 'guest';
+  authRole: 'developer' | 'master' | 'writer' | 'guest';
   isAuthRequired: boolean;
   setAuthRequired: (required: boolean) => void;
-  authenticateStudio: (enteredKey: string) => { success: boolean; role?: 'master' | 'writer'; message: string };
+  authenticateStudio: (enteredKey: string) => { success: boolean; role?: 'developer' | 'master' | 'writer'; message: string };
   logoutStudio: () => void;
+  developerBypass: () => void;
   generateWriterKey: (label?: string) => AccessKey;
   revokeAccessKey: (code: string) => void;
   updateMasterKey: (newKey: string) => boolean;
@@ -210,8 +212,8 @@ export const NovelProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isCustomized, setIsCustomized] = useState(false);
 
   // Derive authRole from authKey
-  const authRole: 'master' | 'writer' | 'guest' = React.useMemo(() => {
-    if (!isAuthRequired) return 'master'; // If auth is disabled, user has full master privileges
+  const authRole: 'developer' | 'master' | 'writer' | 'guest' = React.useMemo(() => {
+    if (!isAuthRequired) return 'developer'; // If auth is disabled, user has full developer privileges
     if (!authKey) return 'guest';
     const found = accessKeys.find((k) => k.code === authKey && !k.revoked);
     if (!found) return 'guest';
@@ -313,6 +315,10 @@ export const NovelProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const logoutStudio = () => {
     setAuthKey(null);
+  };
+
+  const developerBypass = () => {
+    setAuthKey(DEFAULT_DEVELOPER_KEY);
   };
 
   const generateWriterKey = (label = 'Invited Writer') => {
@@ -857,6 +863,7 @@ export const NovelProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setAuthRequired,
         authenticateStudio,
         logoutStudio,
+        developerBypass,
         generateWriterKey,
         revokeAccessKey,
         updateMasterKey,

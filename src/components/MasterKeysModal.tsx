@@ -23,6 +23,7 @@ export const MasterKeysModal: React.FC<MasterKeysModalProps> = ({ isOpen, onClos
 
   if (!isOpen) return null;
 
+  const devKeyObj = accessKeys.find((k) => k.role === 'developer');
   const masterKeyObj = accessKeys.find((k) => k.role === 'master');
   const writerKeys = accessKeys.filter((k) => k.role === 'writer');
 
@@ -70,10 +71,10 @@ export const MasterKeysModal: React.FC<MasterKeysModalProps> = ({ isOpen, onClos
         <div className="flex items-start justify-between border-b border-[var(--border)] pb-4">
           <div>
             <div className="font-mono-meta text-[10px] tracking-[0.2em] text-[var(--text-muted)] uppercase">
-              ※ Sovereign Author Controls
+              ※ Sovereign Author & Developer Governance
             </div>
             <h2 className="font-editorial-title text-3xl text-[var(--text)]">
-              Master Key & Writer Delegation
+              Master Key & Access Hierarchy
             </h2>
           </div>
           <button
@@ -85,13 +86,56 @@ export const MasterKeysModal: React.FC<MasterKeysModalProps> = ({ isOpen, onClos
           </button>
         </div>
 
-        {/* 1. Master Passcode Card */}
+        {/* 1. Developer Root Superuser Card */}
+        <div className="p-4 border border-amber-800/40 bg-amber-900/[0.04] dark:bg-amber-500/[0.04] space-y-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono-meta text-[10px] font-semibold tracking-wider text-amber-800 dark:text-amber-500 uppercase">
+                  ⚡ DEVELOPER ROOT ACCESS (LEAD DEVELOPER)
+                </span>
+                <span className="font-mono-meta text-[8.5px] px-1.5 py-0.2 border border-amber-800/60 text-amber-800 dark:text-amber-500">
+                  FULL SYSTEM SUPERUSER
+                </span>
+              </div>
+              <span className="font-mono text-sm font-semibold tracking-wider text-[var(--text)]">
+                {devKeyObj?.code || 'DEV-ROOT-ACCESS-2026'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleCopy(devKeyObj?.code || 'DEV-ROOT-ACCESS-2026')}
+                className="font-mono-meta text-[9.5px] px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] cursor-pointer"
+              >
+                {copiedKey === (devKeyObj?.code || 'DEV-ROOT-ACCESS-2026') ? 'COPIED!' : 'COPY DEV KEY'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCopyInviteLink(devKeyObj?.code || 'DEV-ROOT-ACCESS-2026')}
+                className="font-mono-meta text-[9.5px] px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] cursor-pointer"
+              >
+                COPY DEV LINK
+              </button>
+            </div>
+          </div>
+          <p className="font-editorial-body text-xs text-[var(--text-muted)] italic">
+            Permanent superuser key. Bypasses locks, inspects database, edits all chapters, resets keys, and manages publisher controls.
+          </p>
+        </div>
+
+        {/* 2. Master Passcode Card (Your Friend) */}
         <div className="p-4 border border-[var(--border)] bg-[var(--paper-tint)]/30 space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <span className="font-mono-meta text-[10px] tracking-wider text-[var(--text-muted)] block uppercase">
-                YOUR MASTER KEY (SUPER ADMIN)
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono-meta text-[10px] font-semibold tracking-wider text-[var(--text-muted)] block uppercase">
+                  🗝 MASTER AUTHOR KEY (YOUR FRIEND'S KEY)
+                </span>
+                <span className="font-mono-meta text-[8.5px] px-1.5 py-0.2 border border-[var(--border)] text-[var(--text)]">
+                  SOVEREIGN AUTHOR
+                </span>
+              </div>
               <span className="font-mono text-sm font-semibold tracking-wider text-[var(--text)]">
                 {masterKeyObj?.code || 'ATELIER-MASTER-2026'}
               </span>
@@ -102,7 +146,14 @@ export const MasterKeysModal: React.FC<MasterKeysModalProps> = ({ isOpen, onClos
                 onClick={() => handleCopy(masterKeyObj?.code || 'ATELIER-MASTER-2026')}
                 className="font-mono-meta text-[9.5px] px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] cursor-pointer"
               >
-                {copiedKey === masterKeyObj?.code ? 'COPIED!' : 'COPY KEY'}
+                {copiedKey === (masterKeyObj?.code || 'ATELIER-MASTER-2026') ? 'COPIED!' : 'COPY KEY'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCopyInviteLink(masterKeyObj?.code || 'ATELIER-MASTER-2026')}
+                className="font-mono-meta text-[9.5px] px-2.5 py-1 border border-[var(--border)] hover:border-[var(--text)] cursor-pointer"
+              >
+                COPY LINK
               </button>
               <button
                 type="button"
@@ -113,6 +164,10 @@ export const MasterKeysModal: React.FC<MasterKeysModalProps> = ({ isOpen, onClos
               </button>
             </div>
           </div>
+
+          <p className="font-editorial-body text-xs text-[var(--text-muted)] italic">
+            Sole sovereign author authority. Has full write/publish permissions and can issue or revoke writer passes to any co-authors.
+          </p>
 
           {editingMasterKey && (
             <form onSubmit={handleSaveNewMasterKey} className="pt-2 flex items-center gap-2">
