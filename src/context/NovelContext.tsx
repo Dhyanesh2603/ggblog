@@ -697,7 +697,8 @@ export const NovelProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const restoredParagraphs = pElements.map((el, i) => ({
       id: i + 1,
       text: el.textContent || '',
-      isAsterism: el.textContent?.trim() === '※' || el.classList.contains('editorial-asterism')
+      isAsterism: el.textContent?.trim() === '※' || el.classList.contains('editorial-asterism'),
+      isSubheading: ['H2', 'H3', 'H4'].includes(el.tagName) || el.classList.contains('editorial-subheading')
     }));
 
     updateChapter(chapterId, {

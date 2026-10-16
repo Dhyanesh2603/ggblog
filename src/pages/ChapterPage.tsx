@@ -423,6 +423,16 @@ export const ChapterPage: React.FC = () => {
                 );
               }
 
+              if (p.isSubheading) {
+                return (
+                  <div key={index} className="pt-8 pb-2">
+                    <h3 className="font-editorial-title text-2xl sm:text-3xl text-[var(--text)] tracking-wide">
+                      {p.text}
+                    </h3>
+                  </div>
+                );
+              }
+
               return (
                 <div key={index} className="relative">
                   <p className="leading-relaxed">

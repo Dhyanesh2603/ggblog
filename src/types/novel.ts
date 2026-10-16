@@ -42,6 +42,7 @@ export interface ChapterParagraph {
   isDialogue?: boolean;
   isBreak?: boolean;
   isAsterism?: boolean;
+  isSubheading?: boolean;
 }
 
 export interface ChapterSnapshot {

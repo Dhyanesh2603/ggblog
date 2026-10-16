@@ -111,6 +111,9 @@ p.first {
         if (p.isBreak) {
           return `<div class="asterism">※ ※ ※</div>`;
         }
+        if (p.isSubheading) {
+          return `<h3 class="subheading">${escapeXml(p.text)}</h3>`;
+        }
         const pClass = pIdx === 0 ? 'class="first"' : '';
         return `<p ${pClass}>${escapeXml(p.text)}</p>`;
       })

@@ -218,7 +218,8 @@ export const WriterStudioPage: React.FC = () => {
       const updatedParagraphs = pElements.map((el, i) => ({
         id: i + 1,
         text: el.textContent || '',
-        isAsterism: el.textContent?.trim() === '※' || el.classList.contains('editorial-asterism')
+        isAsterism: el.textContent?.trim() === '※' || el.classList.contains('editorial-asterism'),
+        isSubheading: ['H2', 'H3', 'H4'].includes(el.tagName) || el.classList.contains('editorial-subheading')
       }));
 
       const words = tempDiv.innerText.trim().split(/\s+/).filter(Boolean).length;
@@ -327,6 +328,7 @@ export const WriterStudioPage: React.FC = () => {
       return ch.paragraphs
         .map((p) => {
           if (p.isAsterism) return '<div class="editorial-asterism text-center my-6">※</div>';
+          if (p.isSubheading) return `<h3 class="font-editorial-title editorial-subheading text-xl sm:text-2xl mt-8 mb-4 tracking-wide text-[var(--text)]">${p.text}</h3>`;
           return `<p>${p.text}</p>`;
         })
         .join('');
@@ -344,10 +346,12 @@ export const WriterStudioPage: React.FC = () => {
 
     const updatedParagraphs: ChapterParagraph[] = pElements.map((el, i) => {
       const isAst = el.textContent?.trim() === '※' || el.classList.contains('editorial-asterism');
+      const isSub = ['H2', 'H3', 'H4'].includes(el.tagName) || el.classList.contains('editorial-subheading');
       return {
         id: i + 1,
         text: el.textContent || '',
-        isAsterism: isAst
+        isAsterism: isAst,
+        isSubheading: isSub
       };
     });
 
@@ -943,6 +947,13 @@ export const WriterStudioPage: React.FC = () => {
                           <div key={idx} className="text-center text-sm tracking-widest my-8 opacity-70">
                             ※
                           </div>
+                        );
+                      }
+                      if (p.isSubheading) {
+                        return (
+                          <h3 key={idx} className="font-editorial-title text-xl sm:text-2xl text-[var(--text)] pt-6 pb-2 tracking-wide">
+                            {p.text}
+                          </h3>
                         );
                       }
                       const isFirst = idx === 0;

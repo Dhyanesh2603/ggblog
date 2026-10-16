@@ -76,7 +76,7 @@ interface ParsedXmlParagraph {
   isBold: boolean;
   isItalic: boolean;
   styleId: string | null;
-  isHeadingStyle: boolean;
+  headingLevel: number | null;
 }
 
 /**
@@ -171,11 +171,22 @@ export async function parseDocxWithFontSizes(
   const rawParagraphs: ParsedXmlParagraph[] = [];
 
   for (const p of pMatches) {
-    // Check style ID
+    // Check style ID and named style metrics
     const styleMatch = p.match(/<w:pStyle\s+[^>]*w:val=["']([^"']+)["']/);
     const styleId = styleMatch ? styleMatch[1] : null;
     const styleName = styleId ? (styleNames[styleId] || styleId) : '';
-    const isHeadingStyle = /heading\s*[1-6]|title|subtitle/i.test(styleName);
+
+    let headingLevel: number | null = null;
+    if (styleName) {
+      const hMatch = styleName.match(/heading\s*(\d)/i);
+      if (hMatch) {
+        headingLevel = parseInt(hMatch[1], 10);
+      } else if (/^title$/i.test(styleName)) {
+        headingLevel = 1;
+      } else if (/^subtitle$/i.test(styleName)) {
+        headingLevel = 2;
+      }
+    }
 
     // Paragraph-level properties
     const pPrSzMatch = p.match(/<w:pPr>[\s\S]*?<w:sz\s+[^>]*w:val=["'](\d+)["']/);
@@ -185,25 +196,25 @@ export async function parseDocxWithFontSizes(
 
     // Runs
     const runs = p.match(/<w:r\b[\s\S]*?<\/w:r>/g) || [];
-    const runSizes: number[] = [];
+    const runSizesWithLength: { size: number; len: number }[] = [];
     let plainText = '';
     let htmlContent = '';
     let hasBold = false;
     let hasItalic = false;
 
     for (const r of runs) {
+      const hasBreak = /<w:br\b/.test(r);
       const texts = (r.match(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g) || []).map((t) =>
         t.replace(/<[^>]+>/g, '')
       );
-      const runText = texts.join('');
-      if (!runText) continue;
+      const runText = texts.join('') + (hasBreak ? '\n' : '');
+      if (!runText && !hasBreak) continue;
 
       plainText += runText;
 
       const rSzMatch = r.match(/<w:sz\s+[^>]*w:val=["'](\d+)["']/);
-      if (rSzMatch) {
-        runSizes.push(parseInt(rSzMatch[1], 10));
-      }
+      const rSize = rSzMatch ? parseInt(rSzMatch[1], 10) : pSize;
+      runSizesWithLength.push({ size: rSize, len: runText.length || 1 });
 
       const isRunBold = /<w:b(\s|\/|>)/.test(r);
       const isRunItalic = /<w:i(\s|\/|>)/.test(r);
@@ -220,7 +231,24 @@ export async function parseDocxWithFontSizes(
     const trimmedText = plainText.trim();
     if (!trimmedText) continue;
 
-    const effectiveSize = runSizes.length > 0 ? Math.max(...runSizes) : pSize;
+    let effectiveSize = pSize;
+    if (runSizesWithLength.length > 0) {
+      const sizeCharWeight: Record<number, number> = {};
+      for (const item of runSizesWithLength) {
+        sizeCharWeight[item.size] = (sizeCharWeight[item.size] || 0) + item.len;
+      }
+      let maxWeight = 0;
+      for (const [sz, weight] of Object.entries(sizeCharWeight)) {
+        if (weight > maxWeight) {
+          maxWeight = weight;
+          effectiveSize = parseInt(sz, 10);
+        }
+      }
+      const maxRunSize = Math.max(...runSizesWithLength.map((x) => x.size));
+      if (maxRunSize > effectiveSize && trimmedText.length < 150) {
+        effectiveSize = maxRunSize;
+      }
+    }
 
     rawParagraphs.push({
       text: trimmedText,
@@ -229,7 +257,7 @@ export async function parseDocxWithFontSizes(
       isBold: hasBold,
       isItalic: hasItalic,
       styleId,
-      isHeadingStyle
+      headingLevel
     });
   }
 
@@ -238,28 +266,29 @@ export async function parseDocxWithFontSizes(
   }
 
   // 3. Font Size Distribution Analysis
-  const sizeFrequency: Record<number, number> = {};
+  const sizeCharCount: Record<number, number> = {};
+  const sizeFreq: Record<number, number> = {};
+
   for (const p of rawParagraphs) {
-    sizeFrequency[p.fontSize] = (sizeFrequency[p.fontSize] || 0) + 1;
+    sizeCharCount[p.fontSize] = (sizeCharCount[p.fontSize] || 0) + p.text.length;
+    sizeFreq[p.fontSize] = (sizeFreq[p.fontSize] || 0) + 1;
   }
 
-  // The most frequent font size is the body/content font size (e.g. 11pt or 12pt)
+  // The body / least font size carries the bulk of text across the manuscript
   let bodyFontSize = defaultSizeHalfPt;
-  let maxFreq = 0;
-  for (const [sz, count] of Object.entries(sizeFrequency)) {
-    if (count > maxFreq) {
-      maxFreq = count;
-      bodyFontSize = parseInt(sz, 10);
+  let maxChars = 0;
+  for (const [szStr, chars] of Object.entries(sizeCharCount)) {
+    if (chars > maxChars) {
+      maxChars = chars;
+      bodyFontSize = parseInt(szStr, 10);
     }
   }
 
-  // All distinct font sizes noticeably higher than normal body text
-  const higherSizes = Object.keys(sizeFrequency)
+  // Distinct font sizes noticeably higher than normal body text (>= bodyFontSize * 1.12)
+  const distinctlyHigherSizes = Object.keys(sizeCharCount)
     .map(Number)
-    .filter((sz) => sz >= bodyFontSize * 1.15)
+    .filter((sz) => sz >= Math.round(bodyFontSize * 1.12))
     .sort((a, b) => b - a);
-
-  const maxFontSize = higherSizes[0] || bodyFontSize;
 
   // 4. Book Title and Author Identification
   let detectedNovelTitle: string | undefined;
@@ -268,13 +297,15 @@ export async function parseDocxWithFontSizes(
 
   if (rawParagraphs.length > 0) {
     const firstP = rawParagraphs[0];
-    // If paragraph 0 has a higher font size than body text and only appears once or has title style
-    if (firstP.fontSize > bodyFontSize * 1.25 || /title/i.test(firstP.styleId || '')) {
-      const countAtFirstSize = rawParagraphs.filter((p) => p.fontSize === firstP.fontSize).length;
-      if (countAtFirstSize === 1 || /title/i.test(firstP.styleId || '')) {
-        detectedNovelTitle = normalizeLiteraryTypography(firstP.text);
-        startIndex = 1;
-      }
+    if (
+      (distinctlyHigherSizes.length > 0 &&
+        firstP.fontSize === distinctlyHigherSizes[0] &&
+        sizeFreq[firstP.fontSize] === 1 &&
+        rawParagraphs.length > 2) ||
+      (firstP.headingLevel === 1 && /title/i.test(firstP.styleId || ''))
+    ) {
+      detectedNovelTitle = normalizeLiteraryTypography(firstP.text);
+      startIndex = 1;
     }
   }
 
@@ -284,25 +315,39 @@ export async function parseDocxWithFontSizes(
     startIndex++;
   }
 
-  // Determine chapter header size and subpart size
-  const chapterHeaderCandidates = higherSizes.filter((sz) => {
-    if (detectedNovelTitle && sz === maxFontSize && higherSizes.length > 1) return false;
+  // Candidate heading sizes for chapters (excluding standalone novel title if detected)
+  const chapterCandidateSizes = distinctlyHigherSizes.filter((sz) => {
+    if (detectedNovelTitle && sz === rawParagraphs[0].fontSize && sizeFreq[sz] === 1) {
+      return false;
+    }
     return true;
   });
 
-  const primaryHeaderSize = chapterHeaderCandidates[0] || maxFontSize;
-  const subpartSize = chapterHeaderCandidates.find((sz) => sz < primaryHeaderSize && sz > bodyFontSize * 1.1) || null;
+  // 3-TIER HIERARCHY:
+  // Tier 1: Highest Heading -> Chapter Title
+  const highestHeaderSize = chapterCandidateSizes.length > 0 ? chapterCandidateSizes[0] : 0;
+
+  // Tier 2: Intermediate Headings -> Sub-headings
+  const intermediateSizes = chapterCandidateSizes.filter(
+    (sz) => sz < Math.round(highestHeaderSize * 0.95) && sz >= Math.round(bodyFontSize * 1.12)
+  );
 
   // Chapter markers regex: Chapter 1, Chapter I, Folio I, Book 1, etc.
-  const chapterMarkerRegex = /^(?:Chapter|CHAPTER|Folio|FOLIO|Book|BOOK|Part|PART)\s+([IVXLCDM\d]+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)(?:\s*[:—–-]\s*|\s*[\n\r]\s*|\s+|$)(.*)$/i;
+  const chapterMarkerRegex = /^(?:Chapter|CHAPTER|Folio|FOLIO|Book|BOOK)\s+([IVXLCDM\d]+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)(?:\s*[:—–-]\s*|\s*[\n\r]\s*|\s+|$)(.*)$/i;
 
   const isSectionBreak = (str: string) =>
     /^(\*\s*\*\s*\*|\*{3,}|—{2,}|-{3,}|※\s*※\s*※|※|- - -|\*\s*\*\s*\*\s*\*)$/.test(str.trim());
 
+  interface ChapterBucketParagraph {
+    text: string;
+    html: string;
+    isSubheading?: boolean;
+  }
+
   interface ChapterBucket {
     title: string;
     subtitle?: string;
-    paragraphs: ParsedXmlParagraph[];
+    paragraphs: ChapterBucketParagraph[];
   }
 
   const buckets: ChapterBucket[] = [];
@@ -310,40 +355,39 @@ export async function parseDocxWithFontSizes(
 
   for (let i = startIndex; i < rawParagraphs.length; i++) {
     const p = rawParagraphs[i];
-    const matchesMarker = chapterMarkerRegex.exec(p.text);
-    const isHigherSizeHeader = p.fontSize >= primaryHeaderSize && p.fontSize > bodyFontSize * 1.12;
-    const isHeadingTagOrStyle = p.isHeadingStyle;
+    const markerMatch = chapterMarkerRegex.exec(p.text);
 
-    // Sub-part / Subtitle detection:
-    // If the active chapter has just been created (has 0 prose paragraphs yet), and this paragraph
-    // has a higher font size (subpart size) or starts with "Part / Sub / Section",
-    // it belongs as the Sub-part / Subtitle of the current chapter!
-    const isSubpartOfCurrent =
-      currentBucket !== null &&
-      !currentBucket.subtitle &&
-      currentBucket.paragraphs.length === 0 &&
-      (
-        (subpartSize !== null && p.fontSize === subpartSize) ||
-        (p.fontSize > bodyFontSize * 1.12 && p.fontSize < primaryHeaderSize) ||
-        (/^(part|sub|section|act)\b/i.test(p.text) && p.fontSize >= bodyFontSize)
-      );
+    // 1. INTERMEDIATE HEADING -> SUB-HEADING
+    const isIntermediateSize =
+      intermediateSizes.includes(p.fontSize) ||
+      (highestHeaderSize > 0 &&
+        p.fontSize < Math.round(highestHeaderSize * 0.95) &&
+        p.fontSize >= Math.round(bodyFontSize * 1.12));
 
-    if (isSubpartOfCurrent && currentBucket) {
-      currentBucket.subtitle = normalizeLiteraryTypography(p.text);
-      continue;
-    }
+    const isSubheadingStyle =
+      (p.headingLevel !== null && p.headingLevel >= 2) || /subtitle/i.test(p.styleId || '');
 
-    // New Chapter condition:
-    // 1. Font size is >= primaryHeaderSize (higher font size for header)
-    // 2. OR Word heading style (Heading 1, Heading 2, etc.)
-    // 3. OR explicit text marker (Chapter 1, Folio I, etc.)
-    const isNewChapter = isHigherSizeHeader || isHeadingTagOrStyle || Boolean(matchesMarker);
+    const isExplicitSubpartMarker =
+      /^(?:part|sub|section|act|scene|interlude)\b/i.test(p.text) &&
+      (highestHeaderSize === 0 || p.fontSize < Math.round(highestHeaderSize * 0.95)) &&
+      p.fontSize >= bodyFontSize;
 
-    if (isNewChapter) {
+    const isSubheading = isIntermediateSize || isSubheadingStyle || isExplicitSubpartMarker;
+
+    // 2. HIGHEST HEADING -> CHAPTER TITLE
+    const isHighestSize = highestHeaderSize > 0 && p.fontSize >= Math.round(highestHeaderSize * 0.95);
+    const isH1Style = p.headingLevel === 1;
+    const isChapterMarker =
+      Boolean(markerMatch) &&
+      !isSubheading &&
+      (highestHeaderSize === 0 || p.fontSize >= Math.round(highestHeaderSize * 0.85));
+
+    const isChapterTitle = !isSubheading && (isHighestSize || isH1Style || isChapterMarker);
+
+    if (isChapterTitle) {
       let title = p.text;
-
-      if (matchesMarker && matchesMarker[2]?.trim()) {
-        title = matchesMarker[2].trim();
+      if (markerMatch && markerMatch[2]?.trim()) {
+        title = markerMatch[2].trim();
       }
 
       currentBucket = {
@@ -352,25 +396,46 @@ export async function parseDocxWithFontSizes(
         paragraphs: []
       };
       buckets.push(currentBucket);
-    } else {
-      // Normal content paragraph
-      if (!currentBucket) {
-        currentBucket = {
-          title: detectedNovelTitle || fallbackFilename.replace(/\.[^/.]+$/, ''),
-          subtitle: undefined,
-          paragraphs: []
-        };
-        buckets.push(currentBucket);
-      }
-      currentBucket.paragraphs.push(p);
+      continue;
     }
+
+    if (!currentBucket) {
+      currentBucket = {
+        title: detectedNovelTitle || fallbackFilename.replace(/\.[^/.]+$/, ''),
+        subtitle: undefined,
+        paragraphs: []
+      };
+      buckets.push(currentBucket);
+    }
+
+    if (isSubheading) {
+      // If this chapter has no prose paragraphs yet and no subtitle, set it as Chapter Subtitle / Sub-part
+      if (!currentBucket.subtitle && currentBucket.paragraphs.length === 0) {
+        currentBucket.subtitle = normalizeLiteraryTypography(p.text);
+      } else {
+        // In-chapter sub-heading within content
+        currentBucket.paragraphs.push({
+          text: normalizeLiteraryTypography(p.text),
+          html: p.html || escapeHtml(p.text),
+          isSubheading: true
+        });
+      }
+      continue;
+    }
+
+    // 3. LEAST FONT SIZE -> NORMAL CONTENT
+    currentBucket.paragraphs.push({
+      text: normalizeLiteraryTypography(p.text),
+      html: p.html || escapeHtml(p.text),
+      isSubheading: false
+    });
   }
 
   // Fallback if no buckets formed
   if (buckets.length === 0) {
     buckets.push({
       title: 'Chapter I',
-      paragraphs: rawParagraphs
+      paragraphs: rawParagraphs.map((p) => ({ text: p.text, html: p.html, isSubheading: false }))
     });
   }
 
@@ -387,7 +452,7 @@ export async function parseDocxWithFontSizes(
 
     bucket.paragraphs.forEach((p, elIdx) => {
       // 1. Epigraph detection in opening 3 paragraphs
-      if (!epigraph && elIdx < 3) {
+      if (!epigraph && elIdx < 3 && !p.isSubheading) {
         const hasQuoteFormat = /^["“].*["”]/s.test(p.text);
         const attributionMatch = p.text.match(/(?:—|--|-)\s*([^—\n]+)$/);
         if (hasQuoteFormat && attributionMatch) {
@@ -413,7 +478,20 @@ export async function parseDocxWithFontSizes(
         return;
       }
 
-      // 3. Normal Prose Content
+      // 3. Intermediate Sub-heading inside chapter content
+      if (p.isSubheading) {
+        finalParagraphs.push({
+          id: finalParagraphs.length + 1,
+          text: p.text,
+          isSubheading: true
+        });
+        htmlParagraphs.push(
+          `<h3 class="font-editorial-title editorial-subheading text-xl sm:text-2xl mt-8 mb-4 tracking-wide text-[var(--text)]">${p.html || escapeHtml(p.text)}</h3>`
+        );
+        return;
+      }
+
+      // 4. Normal Prose Content (least font size)
       const normalized = normalizeLiteraryTypography(p.text);
       const isDialogue = /^["“'‘]/.test(normalized);
 
@@ -477,38 +555,70 @@ export function parseHtmlContentToChapters(
   let detectedNovelTitle: string | undefined;
   let detectedAuthor: string | undefined;
 
+  // Determine highest heading tag in the document (H1 vs H2 vs H3)
+  const hasH1 = elements.some((el) => el.tagName === 'H1');
+  const hasH2 = elements.some((el) => el.tagName === 'H2');
+  const hasH3 = elements.some((el) => el.tagName === 'H3');
+  const highestHeadingTag = hasH1 ? 'H1' : hasH2 ? 'H2' : hasH3 ? 'H3' : null;
+
+  interface RawChapterBucketElement {
+    text: string;
+    html: string;
+    tagName: string;
+    isSubheading?: boolean;
+  }
+
   interface RawChapterBucket {
     title: string;
     subtitle?: string;
-    elements: Element[];
+    elements: RawChapterBucketElement[];
   }
 
   const chapterBuckets: RawChapterBucket[] = [];
   let currentBucket: RawChapterBucket | null = null;
 
-  const chapterMarkerRegex = /^(?:Chapter|CHAPTER|Folio|FOLIO|Part|PART|Section|SECTION|Book|BOOK)\s+([IVXLCDM\d]+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?:\s*[:—–-]\s*|\s*[\n\r]\s*|\s+|$)(.*)$/i;
+  const chapterMarkerRegex = /^(?:Chapter|CHAPTER|Folio|FOLIO|Book|BOOK)\s+([IVXLCDM\d]+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?:\s*[:—–-]\s*|\s*[\n\r]\s*|\s+|$)(.*)$/i;
 
   const isSectionBreak = (str: string) =>
     /^(\*\s*\*\s*\*|\*{3,}|—{2,}|-{3,}|※\s*※\s*※|※|- - -|\*\s*\*\s*\*\s*\*)$/.test(str.trim());
 
-  elements.forEach((el, index) => {
-    const rawContent = el.textContent?.trim() || '';
-    if (!rawContent) return;
+  let startIndex = 0;
+  // Novel title check on first element
+  if (elements.length > 0) {
+    const firstText = elements[0].textContent?.trim() || '';
+    if (elements[0].tagName === 'H1' && !chapterMarkerRegex.test(firstText) && elements.length > 2) {
+      detectedNovelTitle = normalizeLiteraryTypography(firstText);
+      startIndex = 1;
+    }
+  }
 
-    const isHeadingTag = ['H1', 'H2', 'H3'].includes(el.tagName);
+  // Author byline check
+  if (startIndex < elements.length) {
+    const byText = elements[startIndex].textContent?.trim() || '';
+    if (/^by\s+/i.test(byText)) {
+      detectedAuthor = normalizeLiteraryTypography(byText.replace(/^by\s+/i, ''));
+      startIndex++;
+    }
+  }
+
+  for (let index = startIndex; index < elements.length; index++) {
+    const el = elements[index];
+    const rawContent = el.textContent?.trim() || '';
+    if (!rawContent) continue;
+
     const matchesMarker = chapterMarkerRegex.exec(rawContent);
 
-    if (index === 0 && isHeadingTag && !matchesMarker && !detectedNovelTitle) {
-      detectedNovelTitle = normalizeLiteraryTypography(rawContent);
-      return;
-    }
+    // Intermediate headings: tags lower than highest heading tag (e.g. H2/H3/H4 if highest is H1, or H3/H4 if highest is H2)
+    const isIntermediateTag =
+      (highestHeadingTag === 'H1' && ['H2', 'H3', 'H4'].includes(el.tagName)) ||
+      (highestHeadingTag === 'H2' && ['H3', 'H4'].includes(el.tagName)) ||
+      /^(?:part|sub|section|act|scene)\b/i.test(rawContent);
 
-    if (index <= 2 && /^by\s+/i.test(rawContent) && !detectedAuthor) {
-      detectedAuthor = normalizeLiteraryTypography(rawContent.replace(/^by\s+/i, ''));
-      return;
-    }
+    const isHighestHeading =
+      (highestHeadingTag !== null && el.tagName === highestHeadingTag) ||
+      (Boolean(matchesMarker) && !isIntermediateTag);
 
-    if (isHeadingTag || matchesMarker) {
+    if (isHighestHeading) {
       let title = rawContent;
       if (matchesMarker && matchesMarker[2]?.trim()) {
         title = matchesMarker[2].trim();
@@ -520,22 +630,52 @@ export function parseHtmlContentToChapters(
         elements: []
       };
       chapterBuckets.push(currentBucket);
-    } else {
-      if (!currentBucket) {
-        currentBucket = {
-          title: detectedNovelTitle || fallbackFilename.replace(/\.[^/.]+$/, ''),
-          elements: []
-        };
-        chapterBuckets.push(currentBucket);
-      }
-      currentBucket.elements.push(el);
+      continue;
     }
-  });
+
+    if (!currentBucket) {
+      currentBucket = {
+        title: detectedNovelTitle || fallbackFilename.replace(/\.[^/.]+$/, ''),
+        subtitle: undefined,
+        elements: []
+      };
+      chapterBuckets.push(currentBucket);
+    }
+
+    if (isIntermediateTag) {
+      // If this chapter has no prose elements yet and no subtitle, set it as Chapter Subtitle / Sub-part
+      if (!currentBucket.subtitle && currentBucket.elements.length === 0) {
+        currentBucket.subtitle = normalizeLiteraryTypography(rawContent);
+      } else {
+        // In-chapter sub-heading within content
+        currentBucket.elements.push({
+          text: normalizeLiteraryTypography(rawContent),
+          html: el.innerHTML || escapeHtml(rawContent),
+          tagName: el.tagName,
+          isSubheading: true
+        });
+      }
+      continue;
+    }
+
+    // Least font size / normal prose content
+    currentBucket.elements.push({
+      text: normalizeLiteraryTypography(rawContent),
+      html: el.innerHTML || escapeHtml(rawContent),
+      tagName: el.tagName,
+      isSubheading: false
+    });
+  }
 
   if (chapterBuckets.length === 0) {
     chapterBuckets.push({
       title: 'Chapter I',
-      elements
+      elements: elements.map((el) => ({
+        text: el.textContent?.trim() || '',
+        html: el.innerHTML || escapeHtml(el.textContent?.trim() || ''),
+        tagName: el.tagName,
+        isSubheading: false
+      }))
     });
   }
 
@@ -550,10 +690,10 @@ export function parseHtmlContentToChapters(
     const htmlParagraphs: string[] = [];
 
     bucket.elements.forEach((el, elIdx) => {
-      const text = el.textContent?.trim() || '';
+      const text = el.text;
       if (!text) return;
 
-      if (!epigraph && elIdx < 3) {
+      if (!epigraph && elIdx < 3 && !el.isSubheading) {
         const isBlockquote = el.tagName === 'BLOCKQUOTE';
         const hasQuoteFormat = /^["“].*["”]/s.test(text);
         const attributionMatch = text.match(/(?:—|--|-)\s*([^—\n]+)$/);
@@ -585,6 +725,19 @@ export function parseHtmlContentToChapters(
         return;
       }
 
+      // Intermediate sub-heading
+      if (el.isSubheading) {
+        paragraphs.push({
+          id: paragraphs.length + 1,
+          text,
+          isSubheading: true
+        });
+        htmlParagraphs.push(
+          `<h3 class="font-editorial-title editorial-subheading text-xl sm:text-2xl mt-8 mb-4 tracking-wide text-[var(--text)]">${escapeHtml(text)}</h3>`
+        );
+        return;
+      }
+
       const normalized = normalizeLiteraryTypography(text);
       const isDialogue = /^["“'‘]/.test(normalized);
 
@@ -597,7 +750,10 @@ export function parseHtmlContentToChapters(
       htmlParagraphs.push(`<p>${escapeHtml(normalized)}</p>`);
     });
 
-    const totalWords = paragraphs.reduce((acc, p) => acc + (p.isBreak ? 0 : p.text.split(/\s+/).filter(Boolean).length), 0);
+    const totalWords = paragraphs.reduce(
+      (acc, p) => acc + (p.isBreak ? 0 : p.text.split(/\s+/).filter(Boolean).length),
+      0
+    );
     const totalChars = paragraphs.reduce((acc, p) => acc + (p.isBreak ? 0 : p.text.length), 0);
     const readingTimeMin = Math.max(1, Math.round(totalWords / 225));
 

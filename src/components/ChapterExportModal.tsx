@@ -32,6 +32,8 @@ export const ChapterExportModal: React.FC<ChapterExportModalProps> = ({
     chapter.paragraphs.forEach((p) => {
       if (p.isAsterism || p.text.trim() === '※') {
         md += `\n※\n\n`;
+      } else if (p.isSubheading) {
+        md += `\n### ${p.text}\n\n`;
       } else {
         md += `${p.text}\n\n`;
       }
@@ -46,7 +48,11 @@ export const ChapterExportModal: React.FC<ChapterExportModalProps> = ({
     if (chapter.subtitle) txt += `${chapter.subtitle}\n`;
     txt += `----------------------------------------\n\n`;
     chapter.paragraphs.forEach((p) => {
-      txt += `${p.text}\n\n`;
+      if (p.isSubheading) {
+        txt += `\n[ ${p.text} ]\n\n`;
+      } else {
+        txt += `${p.text}\n\n`;
+      }
     });
 
     triggerFileDownload(txt, `${chapter.slug || 'chapter'}.txt`, 'text/plain');
@@ -60,9 +66,12 @@ export const ChapterExportModal: React.FC<ChapterExportModalProps> = ({
 
     work.chapters.forEach((ch, idx) => {
       md += `\n## Chapter ${ch.numberRoman || idx + 1}: ${ch.title}\n\n`;
+      if (ch.subtitle) md += `*${ch.subtitle}*\n\n`;
       ch.paragraphs.forEach((p) => {
         if (p.isAsterism || p.text.trim() === '※') {
           md += `\n※\n\n`;
+        } else if (p.isSubheading) {
+          md += `\n### ${p.text}\n\n`;
         } else {
           md += `${p.text}\n\n`;
         }

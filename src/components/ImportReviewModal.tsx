@@ -159,6 +159,11 @@ export const ImportReviewModal: React.FC<ImportReviewModalProps> = ({
                             Sub-part: {ch.subtitle}
                           </span>
                         )}
+                        {ch.paragraphs.some((p) => p.isSubheading) && (
+                          <span className="font-mono-meta text-[10px] text-[var(--text-muted)] block truncate">
+                            Sub-headings: {ch.paragraphs.filter((p) => p.isSubheading).map((p) => p.text).slice(0, 2).join(' · ')}{ch.paragraphs.filter((p) => p.isSubheading).length > 2 ? ' ...' : ''}
+                          </span>
+                        )}
                         {ch.epigraph && (
                           <span className="font-editorial-body text-xs italic text-[var(--text-muted)] truncate block">
                             “{ch.epigraph.quote}”
