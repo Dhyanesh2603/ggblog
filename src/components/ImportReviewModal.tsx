@@ -63,7 +63,7 @@ export const ImportReviewModal: React.FC<ImportReviewModalProps> = ({
         <div className="flex items-center justify-between p-6 sm:p-8 border-b border-[var(--border)]">
           <div>
             <span className="font-mono-meta text-[10px] tracking-[0.2em] text-[var(--text-muted)] block uppercase">
-              RULE-BASED MANUSCRIPT PARSER
+              FONT-SIZE &amp; EDITORIAL MANUSCRIPT PARSER
             </span>
             <h2 className="font-editorial-title text-3xl sm:text-4xl text-[var(--text)] tracking-tight mt-1">
               Detected Structure
@@ -154,6 +154,11 @@ export const ImportReviewModal: React.FC<ImportReviewModalProps> = ({
                         <span className="font-editorial-title text-lg text-[var(--text)] truncate block">
                           {ch.title}
                         </span>
+                        {ch.subtitle && (
+                          <span className="font-editorial-body text-xs italic text-[var(--text-muted)] block truncate">
+                            Sub-part: {ch.subtitle}
+                          </span>
+                        )}
                         {ch.epigraph && (
                           <span className="font-editorial-body text-xs italic text-[var(--text-muted)] truncate block">
                             “{ch.epigraph.quote}”
